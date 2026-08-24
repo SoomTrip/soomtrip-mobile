@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart'; // 🌟 카카오 로그인 도구상자
 import 'auth_service.dart';
+import 'main_screen.dart';
 import 'worldcup_screen.dart'; // WorldCupScreen이 있는 파일
 
 class SplashScreen extends StatefulWidget {
@@ -14,6 +15,7 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   bool isLoggedIn = false;
+  bool _isCheckingLogin = true;
   bool _isLoading = false;
 
   @override
@@ -24,10 +26,24 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _checkLoginStatus() async {
     final hasJwt = await AuthService.hasJwt();
-    if (!mounted || !hasJwt) return;
+    if (!mounted) return;
+
+    if (!hasJwt) {
+      setState(() => _isCheckingLogin = false);
+      return;
+    }
 
     setState(() => isLoggedIn = true);
-    _openWorldCup();
+    await Future<void>.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+    _openHome();
+  }
+
+  void _openHome() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const MainScreen()),
+    );
   }
 
   void _openWorldCup() {
@@ -99,7 +115,7 @@ class _SplashScreenState extends State<SplashScreen> {
               fit: BoxFit.cover,
             ),
           ),
-          if (!isLoggedIn)
+          if (!_isCheckingLogin && !isLoggedIn)
             Align(
               alignment: Alignment.bottomCenter,
               child: Padding(

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'gacha_screen.dart';
 import 'worldcup_screen.dart';
 import 'my_page_screen.dart';
+import 'friends_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -11,18 +11,17 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  // 🌟 현재 선택된 탭의 번호 (0: 월드컵, 1: 가챠, 2: 홈, 3: 친구, 4: 마이페이지)
-  // 처음 앱을 켰을 때 '홈'이 먼저 보이도록 기본값을 2로 설정합니다.
-  int _currentIndex = 2;
+  // 🌟 현재 선택된 탭의 번호 (0: 월드컵, 1: 홈, 2: 친구, 3: 마이페이지)
+  // 처음 앱을 켰을 때 '홈'이 먼저 보이도록 기본값을 1로 설정합니다.
+  int _currentIndex = 1;
 
-  // 🌟 각 탭을 눌렀을 때 보여줄 화면들
-  final List<Widget> _pages = [
-    const WorldCupScreen(),
-    const GachaScreen(),
-    const Center(child: Text("🏠 메인 홈 화면", style: TextStyle(fontSize: 24))),
-    const Center(child: Text("👥 친구 화면", style: TextStyle(fontSize: 24))),
-    const MyPageScreen(),
-  ];
+  // Hot Reload 후에도 탭 구성이 즉시 반영되도록 매번 현재 목록을 반환합니다.
+  List<Widget> get _pages => const [
+        WorldCupScreen(),
+        _HomeScreen(),
+        FriendsScreen(),
+        MyPageScreen(),
+      ];
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +38,7 @@ class _MainScreenState extends State<MainScreen> {
         decoration: BoxDecoration(
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, -5),
             ),
@@ -55,22 +54,18 @@ class _MainScreenState extends State<MainScreen> {
           },
 
           // 디자인 설정
-          type: BottomNavigationBarType.fixed, // 탭이 5개일 때는 fixed로 해야 글자가 안 깨집니다
+          type: BottomNavigationBarType.fixed,
           backgroundColor: Colors.white,
           selectedItemColor: const Color(0xFF6B4E31), // 선택된 탭 색상 (숨트립 테마색)
           unselectedItemColor: Colors.grey.shade400, // 선택 안 된 탭 색상
           selectedFontSize: 12,
           unselectedFontSize: 12,
 
-          // 3. 5개의 탭 버튼들
+          // 3. 4개의 탭 버튼들
           items: const [
             BottomNavigationBarItem(
               icon: Icon(Icons.emoji_events_rounded), // 🏆 트로피 모양
               label: '월드컵',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.casino_rounded), // 🎲 주사위 모양 (가챠 느낌)
-              label: '가챠',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.home_rounded), // 🏠 홈 모양
@@ -86,6 +81,20 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _HomeScreen extends StatelessWidget {
+  const _HomeScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.expand(
+      child: Image.asset(
+        'assets/images/intro_bg.png',
+        fit: BoxFit.cover,
       ),
     );
   }

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'main_screen.dart';
+import 'recommendation_service.dart';
+import 'saved_region_service.dart';
 
 class GachaScreen extends StatefulWidget {
-  const GachaScreen({super.key});
+  final int? preferenceId;
+
+  const GachaScreen({super.key, this.preferenceId});
 
   @override
   State<GachaScreen> createState() => _GachaScreenState();
@@ -43,6 +47,9 @@ class _GachaScreenState extends State<GachaScreen>
   bool _isDropped = false; // 2. 기계 밑으로 캡슐이 떨어졌는가?
   bool _showZoomedCapsule = false; // 3. 중앙에 큰 캡슐(오버레이)을 띄울 것인가?
   bool _isOpened = false; // 4. 캡슐이 열리고 티켓이 나왔는가?
+  bool _isSavingRegion = false;
+  String? _recommendedDestination;
+  Map<String, dynamic>? _recommendedCandidate;
 
   @override
   void initState() {
@@ -145,14 +152,41 @@ class _GachaScreenState extends State<GachaScreen>
   }
 
   // 🌟 [핵심 로직] 순차적인 애니메이션 흐름
-  void _spinGacha() {
+  Future<void> _spinGacha() async {
     if (_isSpinning) return;
+
+    final preferenceId = widget.preferenceId;
+    if (preferenceId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('먼저 월드컵을 완료해 취향을 저장해 주세요.')),
+      );
+      return;
+    }
 
     setState(() {
       _isSpinning = true;
       _turns += 1.0;
     });
     _shakeController.repeat(reverse: true);
+
+    try {
+      final candidate = await RecommendationService.create(preferenceId);
+      if (!mounted) return;
+      setState(() {
+        _recommendedCandidate = candidate;
+        _recommendedDestination = candidate['name'] as String;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      _shakeController.stop();
+      setState(() => _isSpinning = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('여행지를 추천받지 못했습니다. 다시 시도해 주세요.')),
+      );
+      return;
+    }
+
+    if (!mounted) return;
 
     // 1. 1초 뒤: 흔들림 멈추고 캡슐이 기계 아래로 툭 떨어짐
     Future.delayed(const Duration(seconds: 1), () {
@@ -181,7 +215,37 @@ class _GachaScreenState extends State<GachaScreen>
       _isDropped = false;
       _showZoomedCapsule = false;
       _isOpened = false;
+      _recommendedDestination = null;
+      _recommendedCandidate = null;
     });
+  }
+
+  Future<void> _saveRecommendedRegion() async {
+    if (_isSavingRegion) return;
+
+    final candidate = _recommendedCandidate;
+    if (candidate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('저장할 추천 여행지가 없습니다.')),
+      );
+      return;
+    }
+
+    setState(() => _isSavingRegion = true);
+    try {
+      await SavedRegionService.save(candidate);
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const MainScreen()),
+        (route) => false,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSavingRegion = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('여행지를 저장하지 못했습니다. 다시 시도해 주세요.')),
+      );
+    }
   }
 
   @override
@@ -243,7 +307,7 @@ class _GachaScreenState extends State<GachaScreen>
                       top: 280,
                       left: 113,
                       child: GestureDetector(
-                        onTap: _spinGacha,
+                        onTap: _isSpinning ? null : _spinGacha,
                         child: AnimatedRotation(
                           turns: _turns,
                           duration: const Duration(seconds: 1),
@@ -301,9 +365,8 @@ class _GachaScreenState extends State<GachaScreen>
                             ),
                             // 2. 빛 바로 위에 얹어지는 티켓
                             _buildTicket(
-                                userName: "예원",
-                                destination: "강원도 고성",
-                                memo: "파도 소리와 함께하는 완벽한 힐링"),
+                                destination: _recommendedDestination ?? "",
+                                memo: "파도 소리와 함께하는 완벽한 힐링 파도 소리와 함께하는 완벽한 힐링"),
                           ],
                         ),
                         const SizedBox(height: 20),
@@ -333,17 +396,21 @@ class _GachaScreenState extends State<GachaScreen>
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 30, vertical: 15),
                               ),
-                              onPressed: () {
-                                Navigator.of(context).pushAndRemoveUntil(
-                                  MaterialPageRoute(
-                                    builder: (_) => const MainScreen(),
-                                  ),
-                                  (route) => false,
-                                );
-                              },
-                              child: const Text("저장하기",
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold)),
+                              onPressed: _isSavingRegion
+                                  ? null
+                                  : _saveRecommendedRegion,
+                              child: _isSavingRegion
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.black87,
+                                      ),
+                                    )
+                                  : const Text("저장하기",
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold)),
                             ),
                           ],
                         ),
@@ -359,10 +426,10 @@ class _GachaScreenState extends State<GachaScreen>
   }
 
   // 🎫 어떤 폰에서도 절대 깨지지 않는 티켓 UI
-  Widget _buildTicket(
-      {required String userName,
-      required String destination,
-      required String memo}) {
+  Widget _buildTicket({
+    required String destination,
+    required String memo,
+  }) {
     return FittedBox(
       fit: BoxFit.contain, // 🌟 핵심: 화면 크기에 맞춰 이 안의 모든 것을 '비율 그대로' 축소/확대해 줌
       child: SizedBox(
@@ -383,34 +450,24 @@ class _GachaScreenState extends State<GachaScreen>
             // 2. 티켓 위 글자들
             // (이제 400x200 도화지 기준으로 맞추면, 화면이 작아져도 위치가 같이 줄어들어서 절대 안 어긋납니다!)
             Positioned(
-              top: 102, // 👈 도화지 크기(400x200)에 맞춰서 이 숫자들을 다시 한 번만 예쁘게 맞춰주세요!
-              left: 73,
+              top: 85,
+              left: 0,
+              right: 25,
               child: Text(
-                " $userName",
+                destination,
+                textAlign: TextAlign.center,
                 style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 40,
                     fontWeight: FontWeight.bold,
                     color: Colors.black87),
               ),
             ),
 
             Positioned(
-              top: 120,
-              left: 100,
-              child: Text(
-                " $destination",
-                style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87),
-              ),
-            ),
-
-            Positioned(
-              top: 140,
-              left: 65,
+              top: 150,
+              left: 120,
               child: SizedBox(
-                width: 250, // 글자가 밖으로 튀어나가지 않게 제한
+                width: 140, // 글자가 밖으로 튀어나가지 않게 제한
                 child: Text(
                   " $memo",
                   style: const TextStyle(fontSize: 12, color: Colors.black87),
