@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import 'friend_service.dart';
 
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
@@ -8,357 +11,356 @@ class FriendsScreen extends StatefulWidget {
 }
 
 class _FriendsScreenState extends State<FriendsScreen> {
-  // 🌟 임시 친구 데이터
-  final List<Map<String, String>> _friends = [
-    {'name': '민지 🌲', 'recent': '최근 여행 · 전남 강진'},
-    {'name': '현우 ⛰️', 'recent': '최근 여행 · 충북 단양'},
-    {'name': '지은 🌊', 'recent': '최근 여행 · 경북 청도'},
-    {'name': '승민 🌲', 'recent': '최근 여행 · 강원 평창'},
-    {'name': '서연 🌸', 'recent': '최근 여행 · 제주 서귀포'},
-  ];
+  final _codeController = TextEditingController();
+  FriendUser? _me;
+  List<FriendRelation> _friends = [];
+  List<FriendRelation> _requests = [];
+  bool _isLoading = true;
+  bool _isSending = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final results = await Future.wait([
+        FriendService.getMe(),
+        FriendService.getFriends(),
+        FriendService.getRequests(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _me = results[0] as FriendUser;
+        _friends = results[1] as List<FriendRelation>;
+        _requests = results[2] as List<FriendRelation>;
+        _errorMessage = null;
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() =>
+            _errorMessage = error.toString().replaceFirst('Exception: ', ''));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _sendRequest() async {
+    final code = _codeController.text.trim();
+    if (code.isEmpty || _isSending) return;
+    setState(() => _isSending = true);
+    try {
+      await FriendService.requestFriend(code);
+      if (!mounted) return;
+      _codeController.clear();
+      FocusScope.of(context).unfocus();
+      _showMessage('친구 요청을 보냈어요.');
+    } catch (error) {
+      if (mounted) {
+        _showMessage(error.toString().replaceFirst('Exception: ', ''));
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  Future<void> _handleRequest(FriendRelation request, bool accept) async {
+    Navigator.pop(context);
+    try {
+      accept
+          ? await FriendService.accept(request.id)
+          : await FriendService.reject(request.id);
+      await _loadData();
+      if (mounted) {
+        _showMessage(accept ? '친구 요청을 수락했어요.' : '친구 요청을 거절했어요.');
+      }
+    } catch (error) {
+      if (mounted) {
+        _showMessage(error.toString().replaceFirst('Exception: ', ''));
+      }
+    }
+  }
+
+  Future<void> _removeFriend(FriendRelation relation) async {
+    final user = _friendUser(relation);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('친구 삭제'),
+        content: Text('${user.nickname}님을 친구 목록에서 삭제할까요?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('취소')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('삭제')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await FriendService.remove(relation.id);
+      await _loadData();
+      if (mounted) {
+        _showMessage('친구를 삭제했어요.');
+      }
+    } catch (error) {
+      if (mounted) {
+        _showMessage(error.toString().replaceFirst('Exception: ', ''));
+      }
+    }
+  }
+
+  FriendUser _friendUser(FriendRelation relation) =>
+      relation.otherUser(_me!.id);
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFBF9F4), // 따뜻한 아이보리 배경
+      backgroundColor: const Color(0xFFFBF9F4),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
-          "숨트립 🌱",
-          style: TextStyle(color: Color(0xFF4A7C59), fontWeight: FontWeight.bold, fontSize: 22),
-        ),
+        title: const Text('숨트립 🌱',
+            style: TextStyle(
+                color: Color(0xFF4A7C59), fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_none_rounded, color: Color(0xFF6B4E31)),
-            onPressed: () {},
-          ),
-          // 🌟 상단 내 프로필 아이콘 (시안 우측 상단)
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0, left: 8.0),
-            child: CircleAvatar(
-              radius: 16,
-              backgroundColor: Colors.brown[300],
-              child: const Icon(Icons.face, size: 20, color: Colors.white),
-            ),
-          ),
+              icon: const Icon(Icons.refresh, color: Color(0xFF6B4E31)),
+              onPressed: _loadData)
         ],
       ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 1. 헤더 (타이틀 + 일러스트)
-            _buildHeader(),
-            const SizedBox(height: 24),
-
-            // 2. 검색창
-            _buildSearchBar(),
-            const SizedBox(height: 12),
-
-            // 3. 내 코드 영역
-            _buildMyCodeBox(),
-            const SizedBox(height: 12),
-
-            // 4. 친구 요청 버튼 (클릭 시 바텀시트 팝업)
-            _buildFriendRequestBtn(),
-            const SizedBox(height: 32),
-
-            // 5. 내 친구 목록 헤더
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                RichText(
-                  text: const TextSpan(
-                    style: TextStyle(fontSize: 15, color: Color(0xFF333333), fontWeight: FontWeight.bold, fontFamily: 'CustomFont'),
-                    children: [
-                      TextSpan(text: "내 친구 "),
-                      TextSpan(text: "7명", style: TextStyle(color: Color(0xFF4A7C59))),
-                    ],
-                  ),
-                ),
-                Row(
-                  children: const [
-                    Text("최근 활동순", style: TextStyle(fontSize: 13, color: Colors.grey)),
-                    Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Colors.grey),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // 6. 친구 리스트
-            ..._friends.map((friend) => _buildFriendItem(friend['name']!, friend['recent']!)).toList(),
-            const SizedBox(height: 16),
-
-            // 7. 더 많은 친구 보기 버튼
-            _buildMoreFriendsBtn(),
-            const SizedBox(height: 40),
-          ],
-        ),
-      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _errorMessage != null && _me == null
+              ? _buildError()
+              : RefreshIndicator(onRefresh: _loadData, child: _buildContent()),
     );
   }
 
-  // ==========================================
-  // UI 컴포넌트들
-  // ==========================================
+  Widget _buildError() {
+    return Center(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text(_errorMessage!, textAlign: TextAlign.center),
+        const SizedBox(height: 12),
+        OutlinedButton(onPressed: _loadData, child: const Text('다시 시도')),
+      ]),
+    );
+  }
 
-  Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildContent() {
+    return ListView(
+      physics:
+          const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text("친구", style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: Color(0xFF333333))),
-            SizedBox(height: 10),
-            Text("함께 여행할 친구를\n찾아보세요 🌱", style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.4)),
-          ],
-        ),
-        // 🌟 일러스트 들어갈 자리
-        Container(
-          width: 120, height: 100,
-          decoration: BoxDecoration(color: const Color(0xFFEEF3EA), borderRadius: BorderRadius.circular(16)),
-          child: const Icon(Icons.people_alt_rounded, color: Color(0xFF4A7C59), size: 50),
-        ),
+        _buildHeader(),
+        const SizedBox(height: 24),
+        _buildCodeInput(),
+        const SizedBox(height: 12),
+        _buildMyCodeBox(),
+        const SizedBox(height: 12),
+        _buildFriendRequestButton(),
+        const SizedBox(height: 28),
+        Text('내 친구 ${_friends.length}명',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        if (_friends.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 36),
+            child: Center(
+                child: Text('아직 등록된 친구가 없어요.',
+                    style: TextStyle(color: Colors.grey))),
+          )
+        else
+          ..._friends.map(_buildFriendItem),
       ],
     );
   }
 
-  Widget _buildSearchBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFEBE6D9), width: 1.5),
+  Widget _buildHeader() {
+    return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+      const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('친구', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900)),
+        SizedBox(height: 10),
+        Text('친구 코드를 입력해\n새 친구를 추가해 보세요 🌱',
+            style: TextStyle(color: Colors.grey, height: 1.4)),
+      ]),
+      Container(
+        width: 110,
+        height: 90,
+        decoration: BoxDecoration(
+            color: const Color(0xFFEEF3EA),
+            borderRadius: BorderRadius.circular(16)),
+        child: const Icon(Icons.people_alt_rounded,
+            color: Color(0xFF4A7C59), size: 48),
       ),
-      child: const TextField(
-        decoration: InputDecoration(
-          icon: Icon(Icons.search_rounded, color: Colors.grey),
-          hintText: "닉네임 또는 친구 코드로 검색",
-          hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
-          border: InputBorder.none,
-        ),
+    ]);
+  }
+
+  Widget _buildCodeInput() {
+    return TextField(
+      controller: _codeController,
+      textInputAction: TextInputAction.send,
+      onSubmitted: (_) => _sendRequest(),
+      decoration: InputDecoration(
+        prefixIcon: const Icon(Icons.person_add_alt_1_rounded),
+        hintText: '친구 코드 입력',
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none),
+        suffixIcon: _isSending
+            ? const Padding(
+                padding: EdgeInsets.all(14),
+                child: CircularProgressIndicator(strokeWidth: 2))
+            : IconButton(
+                icon: const Icon(Icons.send_rounded), onPressed: _sendRequest),
       ),
     );
   }
 
   Widget _buildMyCodeBox() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF4F7F0), // 연한 연두색 배경
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFEBE6D9), width: 1.5),
-      ),
-      child: Row(
-        children: const [
-          Text("내 코드", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF4A7C59))),
-          SizedBox(width: 24),
-          Expanded(child: Text("SoomTrip-3A7K9", style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF333333)))),
-          Icon(Icons.copy_rounded, color: Colors.black54, size: 20),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFriendRequestBtn() {
-    return GestureDetector(
-      onTap: _showFriendRequestSheet, // 🌟 클릭 시 바텀 시트 열기
+    return InkWell(
+      onTap: () async {
+        await Clipboard.setData(ClipboardData(text: _me!.userCode));
+        if (mounted) _showMessage('내 코드가 복사됐어요.');
+      },
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: const Color(0xFFF4F7F0),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFFEBE6D9), width: 1.5),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2))],
         ),
-        child: Row(
-          children: [
-            const Text("💌", style: TextStyle(fontSize: 18)),
-            const SizedBox(width: 12),
-            const Text("친구 요청", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF333333))),
-            const SizedBox(width: 8),
-            // 빨간 뱃지
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: const BoxDecoration(color: Color(0xFFE57373), shape: BoxShape.circle),
-              child: const Text("2", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-            ),
-            const Spacer(),
-            const Icon(Icons.chevron_right_rounded, color: Colors.grey),
-          ],
-        ),
+        child: Row(children: [
+          const Text('내 코드',
+              style: TextStyle(
+                  fontWeight: FontWeight.bold, color: Color(0xFF4A7C59))),
+          const SizedBox(width: 24),
+          Expanded(
+              child: Text(_me!.userCode,
+                  style: const TextStyle(fontWeight: FontWeight.w600))),
+          const Icon(Icons.copy_rounded, size: 20),
+        ]),
       ),
     );
   }
 
-  Widget _buildFriendItem(String name, String recentInfo) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      child: Row(
-        children: [
-          // 프로필 이미지
+  Widget _buildFriendRequestButton() {
+    return ListTile(
+      onTap: _showFriendRequestSheet,
+      tileColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      leading: const Text('💌', style: TextStyle(fontSize: 18)),
+      title:
+          const Text('받은 친구 요청', style: TextStyle(fontWeight: FontWeight.bold)),
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (_requests.isNotEmpty)
           CircleAvatar(
-            radius: 26,
-            backgroundColor: Colors.orange[100],
-            child: const Icon(Icons.face_retouching_natural, color: Colors.brown),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
+              radius: 12,
+              backgroundColor: const Color(0xFFE57373),
+              child: Text('${_requests.length}',
+                  style: const TextStyle(color: Colors.white, fontSize: 11))),
+        const Icon(Icons.chevron_right_rounded),
+      ]),
+    );
+  }
+
+  Widget _buildFriendItem(FriendRelation relation) {
+    final user = _friendUser(relation);
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: _avatar(user, 26),
+      title: Text(user.nickname,
+          style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(user.userCode),
+      trailing: IconButton(
+          icon: const Icon(Icons.person_remove_outlined, color: Colors.grey),
+          onPressed: () => _removeFriend(relation)),
+    );
+  }
+
+  Widget _avatar(FriendUser user, double radius) {
+    final url = user.profileImage;
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: const Color(0xFFEEF3EA),
+      backgroundImage: url != null && url.isNotEmpty ? NetworkImage(url) : null,
+      child: url == null || url.isEmpty
+          ? const Icon(Icons.person, color: Color(0xFF4A7C59))
+          : null,
+    );
+  }
+
+  void _showFriendRequestSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 4, 24, 32),
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF333333))),
-                const SizedBox(height: 4),
-                Text(recentInfo, style: const TextStyle(fontSize: 13, color: Colors.grey)),
-              ],
-            ),
-          ),
-          const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
-        ],
+                Text('친구 요청 ${_requests.length}개',
+                    style: const TextStyle(
+                        fontSize: 19, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                if (_requests.isEmpty)
+                  const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 32),
+                      child: Center(child: Text('받은 친구 요청이 없어요.')))
+                else
+                  ..._requests.map(_buildRequestItem),
+              ]),
+        ),
       ),
     );
   }
 
-  Widget _buildMoreFriendsBtn() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFAF9F5),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
-          Text("🌻", style: TextStyle(fontSize: 16)),
-          SizedBox(width: 8),
-          Text("더 많은 친구 보기", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF6B4E31))),
-          SizedBox(width: 4),
-          Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF6B4E31), size: 20),
-        ],
-      ),
-    );
-  }
-
-  // ==========================================
-  // 🌟 친구 요청 모달 바텀 시트 (오른쪽 시안)
-  // ==========================================
-  void _showFriendRequestSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true, // 내용물에 맞춰 높이 조절
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.only(top: 12, left: 24, right: 24, bottom: 40),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 상단 드래그 손잡이 (회색 바)
-              Center(
-                child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
-              ),
-              const SizedBox(height: 20),
-              // 헤더 영역
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Text("친구 요청", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF333333))),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: const BoxDecoration(color: Color(0xFFE57373), shape: BoxShape.circle),
-                        child: const Text("2", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                      ),
-                    ],
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.grey),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              // 요청 리스트
-              _buildRequestItem('민지', '@minji_123', '친구가 되고 싶어요!'),
-              const Divider(color: Color(0xFFF0F0F0), height: 32),
-              _buildRequestItem('현우', '@hyunwoo_00', '친구 요청을 보냈어요!'),
-              const SizedBox(height: 32),
-              // 하단 일러스트 및 문구
-              Center(
-                child: Column(
-                  children: [
-                    const Text("💌", style: TextStyle(fontSize: 40)),
-                    const SizedBox(height: 12),
-                    const Text("새로운 친구와\n더 많은 여행을 함께해요! 🌱", textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: Color(0xFF4A7C59), fontWeight: FontWeight.w600, height: 1.4)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildRequestItem(String name, String handle, String message) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start, // 프로필과 텍스트 위쪽 정렬
-      children: [
-        CircleAvatar(radius: 24, backgroundColor: Colors.blue[100], child: const Icon(Icons.face, color: Colors.brown)),
+  Widget _buildRequestItem(FriendRelation request) {
+    final user = request.requester;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(children: [
+        _avatar(user, 24),
         const SizedBox(width: 12),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF333333))),
-              Text(handle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-              const SizedBox(height: 4),
-              Text(message, style: const TextStyle(fontSize: 13, color: Color(0xFF333333))),
-            ],
-          ),
-        ),
-        // 수락/거절 버튼
-        Row(
-          children: [
-            OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                minimumSize: Size.zero,
-                side: const BorderSide(color: Color(0xFFEBE6D9)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              onPressed: () {},
-              child: const Text("거절", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4A7C59),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                minimumSize: Size.zero,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              onPressed: () {},
-              child: const Text("수락", style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      ],
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(user.nickname,
+              style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text(user.userCode,
+              style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        ])),
+        TextButton(
+            onPressed: () => _handleRequest(request, false),
+            child: const Text('거절')),
+        ElevatedButton(
+            onPressed: () => _handleRequest(request, true),
+            child: const Text('수락')),
+      ]),
     );
   }
 }

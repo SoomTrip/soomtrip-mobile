@@ -294,7 +294,7 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
                       fit: BoxFit.fill,
                       child: SizedBox(
                         // 🌟 기존 코드의 수치를 완벽하게 유지합니다!
-                        width: 540,
+                        width: 550,
                         height: 580,
                         child: Stack(
                           clipBehavior: Clip.none,
@@ -344,13 +344,14 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
                               ),
                             if (selectedStickers[4] != null)
                               Positioned(
-                                right: 20,
-                                top: 80,
+                                right: 50,
+                                top: 90,
                                 child: _buildStickerOnly(
                                   assetPath: selectedStickers[4]!,
-                                  width: 226,
-                                  height: 164,
+                                  width: 185,
+                                  height: 150,
                                   rotation: 0.14,
+                                  fit: BoxFit.fill,
                                 ),
                               ),
                             if (selectedStickers[2] != null)
@@ -611,13 +612,14 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
       {required String assetPath,
       required double width,
       required double height,
-      required double rotation}) {
+      required double rotation,
+      BoxFit fit = BoxFit.contain}) {
     return Transform.rotate(
       angle: rotation,
       child: SizedBox(
           width: width,
           height: height,
-          child: Image.asset(assetPath, fit: BoxFit.contain)),
+          child: Image.asset(assetPath, fit: fit)),
     );
   }
 

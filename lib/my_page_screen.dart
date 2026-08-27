@@ -3,6 +3,7 @@ import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:soomtrip/my_destination_screen.dart';
 
 import 'auth_service.dart';
+import 'friend_service.dart';
 import 'splash_screen.dart';
 
 class MyPageScreen extends StatefulWidget {
@@ -14,6 +15,28 @@ class MyPageScreen extends StatefulWidget {
 
 class _MyPageScreenState extends State<MyPageScreen> {
   bool _isLoggingOut = false;
+  String? _userCode;
+  String? _nickname;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserProfile();
+  }
+
+  Future<void> _loadUserProfile() async {
+    try {
+      final user = await FriendService.getMe();
+      if (mounted) {
+        setState(() {
+          _userCode = user.userCode;
+          _nickname = user.nickname;
+        });
+      }
+    } catch (error) {
+      debugPrint('[My Page] Failed to load user profile: $error');
+    }
+  }
 
   Future<void> _showLogoutDialog() async {
     if (_isLoggingOut) return;
@@ -209,8 +232,8 @@ class _MyPageScreenState extends State<MyPageScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("예원 🌱",
-                    style: TextStyle(
+                Text("${_nickname ?? '불러오는 중...'} 🌱",
+                    style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF333333))),
@@ -222,8 +245,8 @@ class _MyPageScreenState extends State<MyPageScreen> {
                     color: const Color(0xFFE2EBE0),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Text("SoomTrip-3A7K9",
-                      style: TextStyle(
+                  child: Text(_userCode ?? '불러오는 중...',
+                      style: const TextStyle(
                           fontSize: 12,
                           color: Color(0xFF4A7C59),
                           fontWeight: FontWeight.w600)),

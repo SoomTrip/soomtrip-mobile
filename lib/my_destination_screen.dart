@@ -13,6 +13,7 @@ class _MyDestinationsScreenState extends State<MyDestinationsScreen> {
   List<SavedRegion> destinations = [];
   bool _isLoading = true;
   String? _errorMessage;
+  final Set<int> _deletingIds = {};
 
   @override
   void initState() {
@@ -52,8 +53,10 @@ class _MyDestinationsScreenState extends State<MyDestinationsScreen> {
   }
 
   // 🗑️ 삭제 확인 팝업 (팝업도 귀여운 테마로 변경!)
-  void _showDeleteDialog(SavedRegion destination) {
-    showDialog(
+  Future<void> _showDeleteDialog(SavedRegion destination) async {
+    if (_deletingIds.contains(destination.id)) return;
+
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
@@ -69,18 +72,13 @@ class _MyDestinationsScreenState extends State<MyDestinationsScreen> {
               style: const TextStyle(color: Colors.black87)),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(context, false),
               child: const Text("취소",
                   style: TextStyle(
                       color: Colors.grey, fontWeight: FontWeight.bold)),
             ),
             TextButton(
-              onPressed: () {
-                setState(() {
-                  destinations.remove(destination);
-                });
-                Navigator.pop(context);
-              },
+              onPressed: () => Navigator.pop(context, true),
               // 삭제 버튼은 눈에 띄면서도 부드러운 붉은색으로
               child: const Text("삭제",
                   style: TextStyle(
@@ -90,6 +88,31 @@ class _MyDestinationsScreenState extends State<MyDestinationsScreen> {
         );
       },
     );
+
+    if (confirmed != true || !mounted) return;
+    setState(() => _deletingIds.add(destination.id));
+
+    try {
+      await SavedRegionService.remove(destination.id);
+      if (!mounted) return;
+      setState(() {
+        destinations = destinations
+            .where((item) => item.id != destination.id)
+            .toList(growable: false);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('저장한 여행지를 삭제했어요.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _deletingIds.remove(destination.id));
+    }
   }
 
   @override
@@ -205,8 +228,14 @@ class _MyDestinationsScreenState extends State<MyDestinationsScreen> {
                     onTap: () => _showDeleteDialog(destination),
                     child: Container(
                       padding: const EdgeInsets.all(8),
-                      child: const Icon(Icons.close_rounded,
-                          color: Color(0xFFBDBDBD), size: 22),
+                      child: _deletingIds.contains(destination.id)
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.close_rounded,
+                              color: Color(0xFFBDBDBD), size: 22),
                     ),
                   ),
                 ],

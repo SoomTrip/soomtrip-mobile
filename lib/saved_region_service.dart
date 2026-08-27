@@ -133,4 +133,26 @@ class SavedRegionService {
       throw Exception('여행지 저장 실패 (${response.statusCode})');
     }
   }
+
+  static Future<void> remove(int savedRegionId) async {
+    final jwt = await AuthService.getJwt();
+    if (jwt == null || jwt.isEmpty) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    final response = await http.delete(
+      Uri.parse('$_savedRegionsUrl/$savedRegionId'),
+      headers: {'Authorization': 'Bearer $jwt'},
+    ).timeout(const Duration(seconds: 15));
+
+    debugPrint('[Saved Region API] DELETE status: ${response.statusCode}');
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('여행지 삭제 실패 (${response.statusCode})');
+    }
+
+    _cachedRegions = _cachedRegions
+        ?.where((region) => region.id != savedRegionId)
+        .toList(growable: false);
+  }
 }

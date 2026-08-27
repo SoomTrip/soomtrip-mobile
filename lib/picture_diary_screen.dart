@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_drawing_board/flutter_drawing_board.dart';
+import 'package:flutter_drawing_board/paint_contents.dart';
 
 class PictureDiaryScreen extends StatefulWidget {
   const PictureDiaryScreen({super.key});
@@ -69,6 +71,8 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final keyboardHeight = MediaQuery.viewInsetsOf(context).bottom;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFBF9F4),
       appBar: AppBar(
@@ -105,113 +109,147 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
         ),
       ),
       body: SafeArea(
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // ==========================================
-            // 1. 맨 밑바탕에 다이어리 테두리(diary.png) 깔기
-            // ==========================================
-            Image.asset(
-              'assets/images/diary.png',
-              fit: BoxFit.fill, // 기기 화면 비율에 맞게 꽉 채움
-            ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final diaryHeight = constraints.maxHeight + keyboardHeight;
+            final writingFontSize = (diaryHeight * 20 / 700).clamp(16.0, 24.0);
+            final writingStyle = TextStyle(
+              fontSize: writingFontSize,
+              height: 2.2,
+              color: const Color(0xFF333333),
+              fontFamily: 'CustomFont',
+            );
+            final writingWidth =
+                (constraints.maxWidth - 64).clamp(1.0, double.infinity);
 
-            // ==========================================
-            // 2. 다이어리 칸에 맞춰 내용물 배치하기
-            // ==========================================
-            Padding(
-              // 🌟 테두리 두께에 맞춰 패딩을 조절하세요! (기기마다 다를 수 있음)
-              padding: const EdgeInsets.only(
-                  top: 16.0, bottom: 20.0, left: 16.0, right: 16.0),
-              child: Column(
-                children: [
-                  // ----------------------------------------
-                  // [상단 영역] 날짜 & 날씨 (비율 대략 12%)
-                  // ----------------------------------------
-                  Expanded(
-                    flex: 12,
-                    child: Row(
-                      children: [
-                        // [왼쪽 위 칸] 날짜
-                        Expanded(
-                          flex: 1,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text(
-                                "9월 30일 월요일",
-                                style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    fontFamily: 'CustomFont'),
+            return SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              child: SizedBox(
+                width: constraints.maxWidth,
+                height: diaryHeight,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // ==========================================
+                    // 1. 맨 밑바탕에 다이어리 테두리(diary.png) 깔기
+                    // ==========================================
+                    Image.asset(
+                      'assets/images/diary.png',
+                      fit: BoxFit.fill, // 기기 화면 비율에 맞게 꽉 채움
+                    ),
+
+                    // ==========================================
+                    // 2. 다이어리 칸에 맞춰 내용물 배치하기
+                    // ==========================================
+                    Padding(
+                      // 🌟 테두리 두께에 맞춰 패딩을 조절하세요! (기기마다 다를 수 있음)
+                      padding: const EdgeInsets.only(
+                          top: 16.0, bottom: 20.0, left: 16.0, right: 16.0),
+                      child: Column(
+                        children: [
+                          // ----------------------------------------
+                          // [상단 영역] 날짜 & 날씨 (비율 대략 12%)
+                          // ----------------------------------------
+                          Expanded(
+                            flex: 12,
+                            child: Row(
+                              children: [
+                                // [왼쪽 위 칸] 날짜
+                                Expanded(
+                                  flex: 1,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Text(
+                                        "9월 30일 월요일",
+                                        style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.bold,
+                                            fontFamily: 'CustomFont'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // [오른쪽 위 칸] 날씨
+                                Expanded(
+                                  flex: 1,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Text("날씨 ",
+                                          style: TextStyle(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.bold,
+                                              fontFamily: 'CustomFont')),
+                                      _buildWeatherIcon(
+                                          'sun', Icons.wb_sunny_outlined),
+                                      _buildWeatherIcon(
+                                          'cloud', Icons.cloud_queue_rounded),
+                                      _buildWeatherIcon(
+                                          'rain', Icons.water_drop_outlined),
+                                      _buildWeatherIcon(
+                                          'snow', Icons.ac_unit_rounded),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // ----------------------------------------
+                          // [중단 영역] 그림판 (비율 대략 53%)
+                          // ----------------------------------------
+                          Expanded(
+                            flex: 51,
+                            child: Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: _buildCanvasArea(),
+                            ),
+                          ),
+
+                          // ----------------------------------------
+                          // [하단 영역] 글쓰기 (비율 대략 35%)
+                          // ----------------------------------------
+                          Expanded(
+                            flex: 37,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16.0, vertical: 8.0),
+                              child: TextField(
+                                maxLines: 5,
+                                scrollPhysics:
+                                    const NeverScrollableScrollPhysics(),
+                                inputFormatters: [
+                                  _MaxVisualLinesInputFormatter(
+                                    maxLines: 5,
+                                    maxWidth: writingWidth,
+                                    style: writingStyle,
+                                    textDirection: Directionality.of(context),
+                                    textScaler:
+                                        MediaQuery.textScalerOf(context),
+                                  ),
+                                ],
+                                scrollPadding: EdgeInsets.only(
+                                  bottom: keyboardHeight + 24,
+                                ),
+                                style: writingStyle,
+                                decoration: InputDecoration(
+                                  hintText: "오늘의 여행을 기록해 보세요...",
+                                  hintStyle:
+                                      TextStyle(color: Colors.grey.shade400),
+                                  border: InputBorder.none,
+                                ),
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                        // [오른쪽 위 칸] 날씨
-                        Expanded(
-                          flex: 1,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text("날씨 ",
-                                  style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                      fontFamily: 'CustomFont')),
-                              _buildWeatherIcon('sun', Icons.wb_sunny_outlined),
-                              _buildWeatherIcon(
-                                  'cloud', Icons.cloud_queue_rounded),
-                              _buildWeatherIcon(
-                                  'rain', Icons.water_drop_outlined),
-                              _buildWeatherIcon('snow', Icons.ac_unit_rounded),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // ----------------------------------------
-                  // [중단 영역] 그림판 (비율 대략 53%)
-                  // ----------------------------------------
-                  Expanded(
-                    flex: 53,
-                    child: Padding(
-                      padding: const EdgeInsets.all(4.0),
-                      child: _buildCanvasArea(),
-                    ),
-                  ),
-
-                  // ----------------------------------------
-                  // [하단 영역] 글쓰기 (비율 대략 35%)
-                  // ----------------------------------------
-                  Expanded(
-                    flex: 35,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0, vertical: 8.0),
-                      child: TextField(
-                        maxLines: null,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          // 🌟 핵심! 이 height 값을 조절해야 diary.png의 가로줄과 글씨가 딱 맞습니다. (보통 2.0 ~ 2.5 사이)
-                          height: 2.2,
-                          color: Color(0xFF333333),
-                          fontFamily: 'CustomFont', // 손글씨 폰트 적용
-                        ),
-                        decoration: InputDecoration(
-                          hintText: "오늘의 여행을 기록해 보세요...",
-                          hintStyle: TextStyle(color: Colors.grey.shade400),
-                          border: InputBorder.none,
-                        ),
+                        ],
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -453,9 +491,13 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
   }
 
   void _applyCurrentStyle() {
+    _drawingController.setPaintContent(
+      _isEraser ? Eraser() : SimpleLine(),
+    );
     _drawingController.setStyle(
-        color: _isEraser ? Colors.white : _penColor.withValues(alpha: 0.7),
-        strokeWidth: _isEraser ? _eraserWidth : _penWidth);
+      color: _penColor.withValues(alpha: 0.7),
+      strokeWidth: _isEraser ? _eraserWidth : _penWidth,
+    );
   }
 
   Widget _buildToolButton(IconData icon, VoidCallback onPressed,
@@ -531,5 +573,38 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
         ),
       ),
     );
+  }
+}
+
+class _MaxVisualLinesInputFormatter extends TextInputFormatter {
+  final int maxLines;
+  final double maxWidth;
+  final TextStyle style;
+  final TextDirection textDirection;
+  final TextScaler textScaler;
+
+  const _MaxVisualLinesInputFormatter({
+    required this.maxLines,
+    required this.maxWidth,
+    required this.style,
+    required this.textDirection,
+    required this.textScaler,
+  });
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if ('\n'.allMatches(newValue.text).length >= maxLines) return oldValue;
+
+    final painter = TextPainter(
+      text: TextSpan(text: newValue.text, style: style),
+      textDirection: textDirection,
+      textScaler: textScaler,
+      maxLines: maxLines,
+    )..layout(maxWidth: maxWidth);
+
+    return painter.didExceedMaxLines ? oldValue : newValue;
   }
 }
