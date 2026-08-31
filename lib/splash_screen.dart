@@ -83,6 +83,17 @@ class _SplashScreenState extends State<SplashScreen> {
       // 카카오 토큰을 백엔드로 보내 SoomTrip JWT를 발급받아 저장합니다.
       await AuthService.loginWithKakao(token.accessToken);
 
+      // 카카오 프로필 닉네임을 SoomTrip 사용자 DB에도 동기화합니다.
+      try {
+        final kakaoUser = await UserApi.instance.me();
+        final nickname = kakaoUser.kakaoAccount?.profile?.nickname;
+        if (nickname != null && nickname.trim().isNotEmpty) {
+          await AuthService.updateNickname(nickname);
+        }
+      } catch (error) {
+        debugPrint('[Kakao Login] Nickname sync failed: $error');
+      }
+
       if (!mounted) return;
       _openWorldCup();
     } catch (_) {

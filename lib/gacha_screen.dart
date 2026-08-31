@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
 import 'main_screen.dart';
 import 'recommendation_service.dart';
 import 'saved_region_service.dart';
@@ -14,32 +13,9 @@ class GachaScreen extends StatefulWidget {
 }
 
 class _GachaScreenState extends State<GachaScreen>
-    with TickerProviderStateMixin {
-  // --- 기존 가챠 배경 애니메이션용 변수들 ---
-  static const double _capsuleSize = 50;
-  static const List<String> _capsuleAssets = [
-    'assets/images/gacha_capsule.png',
-    'assets/images/gacha_capsule2.png',
-    'assets/images/gacha_capsule3.png',
-    'assets/images/gacha_capsule4.png',
-  ];
+    with SingleTickerProviderStateMixin {
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
-  late AnimationController _backgroundController;
-  final List<double> _capsuleAngles = List.filled(8, 0);
-  final List<Offset> _capsulePositions = [];
-  final List<Offset> _capsuleVelocities = [
-    const Offset(30, 22),
-    const Offset(-24, 32),
-    const Offset(28, -26),
-    const Offset(-32, -20),
-    const Offset(20, 30),
-    const Offset(-28, 24),
-    const Offset(32, -22),
-    const Offset(-22, -30),
-  ];
-  Duration _lastBackgroundTick = Duration.zero;
-  Size _backgroundSize = Size.zero;
 
   // --- 🌟 연출 흐름을 제어하는 상태 변수들 ---
   double _turns = 0.0;
@@ -58,97 +34,12 @@ class _GachaScreenState extends State<GachaScreen>
         vsync: this, duration: const Duration(milliseconds: 50));
     _shakeAnimation =
         Tween<double>(begin: -4.0, end: 4.0).animate(_shakeController);
-    _backgroundController =
-        AnimationController(vsync: this, duration: const Duration(days: 1))
-          ..repeat();
   }
 
   @override
   void dispose() {
     _shakeController.dispose();
-    _backgroundController.dispose();
     super.dispose();
-  }
-
-  // --- 배경 캡슐 로직 (기존과 동일) ---
-  void _initializeCapsules(Size size) {
-    const startingPoints = [
-      Offset(0.05, 0.08),
-      Offset(0.72, 0.12),
-      Offset(0.25, 0.28),
-      Offset(0.82, 0.34),
-      Offset(0.08, 0.55),
-      Offset(0.62, 0.58),
-      Offset(0.32, 0.78),
-      Offset(0.78, 0.84),
-    ];
-    final maxX = (size.width - _capsuleSize).clamp(0.0, double.infinity);
-    final maxY = (size.height - _capsuleSize).clamp(0.0, double.infinity);
-    _capsulePositions
-      ..clear()
-      ..addAll(startingPoints
-          .map((point) => Offset(point.dx * maxX, point.dy * maxY)));
-    _backgroundSize = size;
-    _lastBackgroundTick = Duration.zero;
-  }
-
-  void _moveCapsules(Size size) {
-    if (_capsulePositions.isEmpty || size != _backgroundSize)
-      _initializeCapsules(size);
-    final elapsed = _backgroundController.lastElapsedDuration ?? Duration.zero;
-    if (_lastBackgroundTick == Duration.zero) {
-      _lastBackgroundTick = elapsed;
-      return;
-    }
-    final seconds = ((elapsed - _lastBackgroundTick).inMicroseconds / 1000000)
-        .clamp(0.0, 0.05);
-    _lastBackgroundTick = elapsed;
-    final maxX = (size.width - _capsuleSize).clamp(0.0, double.infinity);
-    final maxY = (size.height - _capsuleSize).clamp(0.0, double.infinity);
-
-    for (var i = 0; i < _capsulePositions.length; i++) {
-      var position = _capsulePositions[i] + _capsuleVelocities[i] * seconds;
-      var velocity = _capsuleVelocities[i];
-      if (position.dx <= 0 || position.dx >= maxX) {
-        velocity = Offset(-velocity.dx, velocity.dy);
-        position = Offset(position.dx.clamp(0.0, maxX), position.dy);
-      }
-      if (position.dy <= 0 || position.dy >= maxY) {
-        velocity = Offset(velocity.dx, -velocity.dy);
-        position = Offset(position.dx, position.dy.clamp(0.0, maxY));
-      }
-      _capsulePositions[i] = position;
-      _capsuleVelocities[i] = velocity;
-      _capsuleAngles[i] += 0.18 * seconds;
-    }
-  }
-
-  Widget _buildCapsuleBackground() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final size = constraints.biggest;
-        return AnimatedBuilder(
-          animation: _backgroundController,
-          builder: (context, child) {
-            _moveCapsules(size);
-            return Stack(
-              clipBehavior: Clip.hardEdge,
-              children: List.generate(8, (index) {
-                return Positioned(
-                  left: _capsulePositions[index].dx,
-                  top: _capsulePositions[index].dy,
-                  child: Transform.rotate(
-                    angle: _capsuleAngles[index],
-                    child: Image.asset(_capsuleAssets[index ~/ 2],
-                        width: _capsuleSize, height: _capsuleSize),
-                  ),
-                );
-              }),
-            );
-          },
-        );
-      },
-    );
   }
 
   // 🌟 [핵심 로직] 순차적인 애니메이션 흐름
@@ -251,7 +142,7 @@ class _GachaScreenState extends State<GachaScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFDECB3),
+      backgroundColor: const Color(0xFFFBF9F4),
       appBar: AppBar(
         title:
             const Text("운명의 여행지 뽑기", style: TextStyle(color: Colors.black87)),
@@ -261,10 +152,13 @@ class _GachaScreenState extends State<GachaScreen>
       ),
       body: Stack(
         children: [
-          // 1. [맨 뒷배경] 떠다니는 캡슐들
-          Positioned.fill(child: _buildCapsuleBackground()),
-
-          // 2. [중간층] 덜덜 떨리는 가챠 기계 본체
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/gacha_bg.png',
+              fit: BoxFit.cover,
+            ),
+          ),
+          // 덜덜 떨리는 가챠 기계 본체
           Center(
             child: AnimatedBuilder(
               animation: _shakeAnimation,
@@ -281,7 +175,7 @@ class _GachaScreenState extends State<GachaScreen>
                   clipBehavior: Clip.none,
                   children: [
                     Positioned(
-                      top: 0,
+                      top: 50,
                       left: 0,
                       right: 0,
                       child: Image.asset('assets/images/gacha_machine.png',
@@ -291,7 +185,7 @@ class _GachaScreenState extends State<GachaScreen>
                     AnimatedPositioned(
                       duration: const Duration(milliseconds: 800),
                       curve: Curves.bounceOut,
-                      top: _isDropped ? 400 : 370,
+                      top: _isDropped ? 450 : 420,
                       left: 217,
                       child: AnimatedOpacity(
                         duration: const Duration(milliseconds: 150),
@@ -304,8 +198,8 @@ class _GachaScreenState extends State<GachaScreen>
                     ),
                     // 손잡이
                     Positioned(
-                      top: 280,
-                      left: 113,
+                      top: 300,
+                      left: 101,
                       child: GestureDetector(
                         onTap: _isSpinning ? null : _spinGacha,
                         child: AnimatedRotation(
@@ -313,7 +207,7 @@ class _GachaScreenState extends State<GachaScreen>
                           duration: const Duration(seconds: 1),
                           curve: Curves.easeInOut,
                           child: Image.asset('assets/images/gacha_handle.png',
-                              width: 104),
+                              width: 116),
                         ),
                       ),
                     ),
@@ -391,7 +285,7 @@ class _GachaScreenState extends State<GachaScreen>
                             const SizedBox(width: 20),
                             ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFFEE500),
+                                backgroundColor: const Color(0xFFEBE6D9),
                                 foregroundColor: Colors.black87,
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 30, vertical: 15),
@@ -451,15 +345,21 @@ class _GachaScreenState extends State<GachaScreen>
             // (이제 400x200 도화지 기준으로 맞추면, 화면이 작아져도 위치가 같이 줄어들어서 절대 안 어긋납니다!)
             Positioned(
               top: 85,
-              left: 0,
-              right: 25,
-              child: Text(
-                destination,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 40,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87),
+              left: 85,
+              right: 85,
+              height: 50,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.center,
+                child: Text(
+                  destination,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: const TextStyle(
+                      fontSize: 40,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87),
+                ),
               ),
             ),
 

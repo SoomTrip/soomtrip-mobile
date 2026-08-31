@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   static const _authUrl = 'https://soomtrip-api.cspc.me/auth/kakao';
+  static const _meUrl = 'https://soomtrip-api.cspc.me/users/me';
   static const _jwtKey = 'soomtrip_access_token';
 
   static Future<void> loginWithKakao(String kakaoAccessToken) async {
@@ -32,6 +33,31 @@ class AuthService {
 
     final preferences = await SharedPreferences.getInstance();
     await preferences.setString(_jwtKey, jwt);
+  }
+
+  static Future<void> updateNickname(String nickname) async {
+    final trimmedNickname = nickname.trim();
+    if (trimmedNickname.isEmpty) return;
+
+    final jwt = await getJwt();
+    if (jwt == null || jwt.isEmpty) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    final response = await http
+        .patch(
+          Uri.parse(_meUrl),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $jwt',
+          },
+          body: jsonEncode({'nickname': trimmedNickname}),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('닉네임 동기화 실패 (${response.statusCode})');
+    }
   }
 
   static Future<bool> hasJwt() async {
