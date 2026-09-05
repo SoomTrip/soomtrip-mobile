@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:flutter/material.dart';
 import 'main_screen.dart';
 import 'recommendation_service.dart';
@@ -5,8 +8,13 @@ import 'saved_region_service.dart';
 
 class GachaScreen extends StatefulWidget {
   final int? preferenceId;
+  final Future<Map<String, dynamic>>? recommendationFuture;
 
-  const GachaScreen({super.key, this.preferenceId});
+  const GachaScreen({
+    super.key,
+    this.preferenceId,
+    this.recommendationFuture,
+  });
 
   @override
   State<GachaScreen> createState() => _GachaScreenState();
@@ -23,7 +31,16 @@ class _GachaScreenState extends State<GachaScreen>
   bool _isDropped = false; // 2. 기계 밑으로 캡슐이 떨어졌는가?
   bool _showZoomedCapsule = false; // 3. 중앙에 큰 캡슐(오버레이)을 띄울 것인가?
   bool _isOpened = false; // 4. 캡슐이 열리고 티켓이 나왔는가?
+  bool _showTicket = false;
   bool _isSavingRegion = false;
+  late Future<Map<String, dynamic>> _recommendationFuture;
+  Timer? _statusTimer;
+  int _statusIndex = 0;
+  final List<String> _statusMessages = const [
+    '나의 여행 취향 분석 중... 🔍',
+    '나만의 여행지 찾는 중... 🗺️',
+    '거의 다 왔어요! ✨',
+  ];
   String? _recommendedDestination;
   Map<String, dynamic>? _recommendedCandidate;
 
@@ -34,10 +51,42 @@ class _GachaScreenState extends State<GachaScreen>
         vsync: this, duration: const Duration(milliseconds: 50));
     _shakeAnimation =
         Tween<double>(begin: -4.0, end: 4.0).animate(_shakeController);
+    final preferenceId = widget.preferenceId;
+    _recommendationFuture = widget.recommendationFuture ??
+        (preferenceId == null
+            ? Future<Map<String, dynamic>>.error(
+                StateError('취향 분석 결과가 없습니다.'),
+              )
+            : RecommendationService.create(preferenceId));
+    _watchRecommendation(_recommendationFuture);
+  }
+
+  void _startStatusMessages() {
+    _statusTimer?.cancel();
+    _statusTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!mounted || _statusIndex >= _statusMessages.length - 1) return;
+      setState(() => _statusIndex++);
+    });
+  }
+
+  Future<void> _watchRecommendation(
+    Future<Map<String, dynamic>> request,
+  ) async {
+    try {
+      final candidate = await request;
+      if (!mounted || !identical(request, _recommendationFuture)) return;
+      setState(() {
+        _recommendedCandidate = candidate;
+        _recommendedDestination = candidate['name'] as String;
+      });
+    } catch (_) {
+      if (!mounted || !identical(request, _recommendationFuture)) return;
+    }
   }
 
   @override
   void dispose() {
+    _statusTimer?.cancel();
     _shakeController.dispose();
     super.dispose();
   }
@@ -57,18 +106,21 @@ class _GachaScreenState extends State<GachaScreen>
     setState(() {
       _isSpinning = true;
       _turns += 1.0;
+      _statusIndex = 0;
     });
+    _startStatusMessages();
     _shakeController.repeat(reverse: true);
 
     try {
-      final candidate = await RecommendationService.create(preferenceId);
-      if (!mounted) return;
-      setState(() {
-        _recommendedCandidate = candidate;
-        _recommendedDestination = candidate['name'] as String;
-      });
+      final request = _recommendationFuture;
+      await Future.wait([
+        request,
+        // 각 안내 문구를 최소 2초씩 보여 준다.
+        Future<void>.delayed(const Duration(seconds: 6)),
+      ]);
     } catch (_) {
       if (!mounted) return;
+      _statusTimer?.cancel();
       _shakeController.stop();
       setState(() => _isSpinning = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -78,37 +130,49 @@ class _GachaScreenState extends State<GachaScreen>
     }
 
     if (!mounted) return;
+    _statusTimer?.cancel();
+    _shakeController.stop();
+    setState(() => _isDropped = true);
 
-    // 1. 1초 뒤: 흔들림 멈추고 캡슐이 기계 아래로 툭 떨어짐
-    Future.delayed(const Duration(seconds: 1), () {
-      if (!mounted) return;
-      _shakeController.stop();
-      setState(() => _isDropped = true);
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    if (!mounted) return;
+    setState(() => _showZoomedCapsule = true);
+  }
 
-      // 2. 캡슐이 떨어진 후 0.8초 뒤: 화면 어두워지며 중앙에 큰 캡슐 등장!
-      Future.delayed(const Duration(milliseconds: 1200), () {
-        if (!mounted) return;
-        setState(() => _showZoomedCapsule = true);
-
-        // 3. 큰 캡슐 등장 후 1.5초 뒤: 스르륵 열리면서 티켓으로 변환!
-        Future.delayed(const Duration(milliseconds: 1500), () {
-          if (!mounted) return;
-          setState(() => _isOpened = true);
-        });
-      });
-    });
+  Future<void> _openCapsule() async {
+    if (_isOpened) return;
+    setState(() => _isOpened = true);
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    if (!mounted) return;
+    setState(() => _showTicket = true);
   }
 
   // 🌟 처음 상태로 돌아가는 함수 (다시 뽑기)
   void _resetGacha() {
+    final preferenceId = widget.preferenceId;
+    if (preferenceId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('취향 분석 결과가 없어 다시 뽑을 수 없습니다.')),
+      );
+      return;
+    }
+
+    // 버튼을 누르는 즉시 다음 추천 요청을 시작한다.
+    final nextRequest = RecommendationService.create(preferenceId);
+    _statusTimer?.cancel();
+    _recommendationFuture = nextRequest;
+
     setState(() {
       _isSpinning = false;
       _isDropped = false;
       _showZoomedCapsule = false;
       _isOpened = false;
+      _showTicket = false;
       _recommendedDestination = null;
       _recommendedCandidate = null;
+      _statusIndex = 0;
     });
+    _watchRecommendation(nextRequest);
   }
 
   Future<void> _saveRecommendedRegion() async {
@@ -217,99 +281,161 @@ class _GachaScreenState extends State<GachaScreen>
             ),
           ),
 
-          // 🌟 3. [맨 앞층 - 오버레이] 화면이 어두워지며 캡슐 -> 티켓 등장!
+          if (_isSpinning && !_isDropped && !_showZoomedCapsule)
+            Positioned(
+              left: 24,
+              right: 24,
+              bottom: 24,
+              child: Text(
+                _statusMessages[_statusIndex],
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF3F5948),
+                ),
+              ),
+            ),
+
+          // 결과 캡슐과 티켓 레이어
           if (_showZoomedCapsule)
             Positioned.fill(
               child: Container(
-                color: Colors.black.withOpacity(0.6), // 배경을 어둡게 눌러줌
+                color: Colors.black.withValues(alpha: 0.6),
                 child: Center(
-                  child: AnimatedCrossFade(
-                    duration: const Duration(milliseconds: 800), // 스르륵 변하는 속도
-                    crossFadeState: _isOpened
-                        ? CrossFadeState.showSecond
-                        : CrossFadeState.showFirst,
-
-                    // [상태 1] 🌟 크기를 약 2배로 확 키운 중앙 캡슐 (200 -> 380)
-                    firstChild: Image.asset('assets/images/gacha_capsule.png',
-                        width: 380),
-
-                    // [상태 2] 🌟 동그랗고 하얀 후광이 퍼지는 티켓
-                    secondChild: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // 티켓과 동그란 빛 영역
-                        Stack(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 430,
+                        height: 480,
+                        child: Stack(
+                          clipBehavior: Clip.none,
                           alignment: Alignment.center,
                           children: [
-                            // 1. 네모로 잘리지 않는 완벽한 둥근 하얀 빛 (Radial Gradient)
-                            Container(
-                              width: 450, // 빛이 퍼질 충분히 넒은 공간
-                              height: 450,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: RadialGradient(
-                                  colors: [
-                                    Colors.white.withOpacity(0.9), // 중심은 밝은 하얀색
-                                    Colors.white
-                                        .withOpacity(0.0), // 바깥쪽은 완전 투명하게
-                                  ],
-                                  stops: const [0.2, 1.0], // 빛이 부드럽게 퍼지는 비율
+                            Positioned(
+                              top: -35,
+                              child: AnimatedOpacity(
+                                duration: const Duration(milliseconds: 500),
+                                opacity: _showTicket ? 1 : 0,
+                                child: Container(
+                                  width: 440,
+                                  height: 440,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: RadialGradient(
+                                      colors: [
+                                        Colors.white.withValues(alpha: 0.95),
+                                        Colors.white.withValues(alpha: 0),
+                                      ],
+                                      stops: const [0.2, 1],
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                            // 2. 빛 바로 위에 얹어지는 티켓
-                            _buildTicket(
-                                destination: _recommendedDestination ?? "",
-                                memo: "파도 소리와 함께하는 완벽한 힐링 파도 소리와 함께하는 완벽한 힐링"),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-
-                        // 하단 버튼들
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: Colors.black87,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 30, vertical: 15),
+                            Positioned(
+                              bottom: 50,
+                              child: GestureDetector(
+                                onTap: _openCapsule,
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 400),
+                                  transitionBuilder: (child, animation) =>
+                                      FadeTransition(
+                                    opacity: animation,
+                                    child: ScaleTransition(
+                                      scale: Tween<double>(begin: 0.96, end: 1)
+                                          .animate(animation),
+                                      child: child,
+                                    ),
+                                  ),
+                                  child: Image.asset(
+                                    _isOpened
+                                        ? 'assets/images/gacha_capsule_open.png'
+                                        : 'assets/images/gacha_capsule.png',
+                                    key: ValueKey(_isOpened),
+                                    width: 370,
+                                  ),
+                                ),
                               ),
-                              onPressed:
-                                  _resetGacha, // 다시 뽑기 누르면 오버레이 꺼지고 처음으로!
-                              child: const Text("다시 뽑기",
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold)),
                             ),
-                            const SizedBox(width: 20),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFFEBE6D9),
-                                foregroundColor: Colors.black87,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 30, vertical: 15),
+                            AnimatedPositioned(
+                              duration: const Duration(milliseconds: 900),
+                              curve: Curves.easeOutBack,
+                              top: _showTicket ? 135 : 225,
+                              left: 15,
+                              right: 15,
+                              child: AnimatedOpacity(
+                                duration: const Duration(milliseconds: 250),
+                                opacity: _showTicket ? 1 : 0,
+                                child: _showTicket
+                                    ? _buildTicket(
+                                        destination:
+                                            _recommendedDestination ?? '',
+                                        memo: '당신의 취향에 꼭 맞는 특별한 여행지예요.',
+                                      )
+                                    : const SizedBox(height: 250),
                               ),
-                              onPressed: _isSavingRegion
-                                  ? null
-                                  : _saveRecommendedRegion,
-                              child: _isSavingRegion
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.black87,
-                                      ),
-                                    )
-                                  : const Text("저장하기",
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold)),
                             ),
                           ],
                         ),
-                      ],
-                    ),
+                      ),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        child: _showTicket
+                            ? Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      foregroundColor: Colors.black87,
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 30, vertical: 15),
+                                    ),
+                                    onPressed:
+                                        _resetGacha, // 다시 뽑기 누르면 오버레이 꺼지고 처음으로!
+                                    child: const Text("다시 뽑기",
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold)),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFEBE6D9),
+                                      foregroundColor: Colors.black87,
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 30, vertical: 15),
+                                    ),
+                                    onPressed: _isSavingRegion
+                                        ? null
+                                        : _saveRecommendedRegion,
+                                    child: _isSavingRegion
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.black87,
+                                            ),
+                                          )
+                                        : const Text("저장하기",
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              )
+                            : const Text(
+                                '캡슐을 터치해주세요!',
+                                key: ValueKey('tap-capsule'),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -329,7 +455,7 @@ class _GachaScreenState extends State<GachaScreen>
       child: SizedBox(
         // 🚨 중요: 가지고 계신 기차표 원본 이미지의 비율에 맞춰서 width와 height를 정해주세요!
         // (예: 가로가 길고 세로가 짧은 비율)
-        width: 400,
+        width: 420,
         height: 250,
         child: Stack(
           children: [
@@ -346,7 +472,7 @@ class _GachaScreenState extends State<GachaScreen>
             Positioned(
               top: 85,
               left: 85,
-              right: 85,
+              right: 125,
               height: 50,
               child: FittedBox(
                 fit: BoxFit.scaleDown,
@@ -365,14 +491,24 @@ class _GachaScreenState extends State<GachaScreen>
 
             Positioned(
               top: 150,
-              left: 120,
+              left: 130,
               child: SizedBox(
                 width: 140, // 글자가 밖으로 튀어나가지 않게 제한
-                child: Text(
-                  " $memo",
-                  style: const TextStyle(fontSize: 12, color: Colors.black87),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                child: AnimatedTextKit(
+                  key: ValueKey('ai-comment-$destination'),
+                  isRepeatingAnimation: false,
+                  displayFullTextOnTap: true,
+                  animatedTexts: [
+                    TyperAnimatedText(
+                      memo,
+                      speed: const Duration(milliseconds: 110),
+                      textStyle: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

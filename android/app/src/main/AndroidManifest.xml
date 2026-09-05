@@ -5,6 +5,11 @@
         android:label="soomtrip"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
+        <meta-data
+            android:name="com.naver.maps.map.CLIENT_ID"
+            android:value="cdmctmuuvq" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

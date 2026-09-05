@@ -185,7 +185,8 @@ class _MyDestinationsScreenState extends State<MyDestinationsScreen> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => DestinationActionScreen(
-                      destinationName: destination.regionName),
+                    destination: destination,
+                  ),
                 ),
               );
             },

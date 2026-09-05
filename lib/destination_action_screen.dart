@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'destination_detail_screen.dart'; // 기존에 만든 상세(경로) 화면 불러오기
 import 'picture_diary_screen.dart';
+import 'saved_region_service.dart';
 
 class DestinationActionScreen extends StatelessWidget {
-  final String destinationName;
+  final SavedRegion destination;
 
-  const DestinationActionScreen({super.key, required this.destinationName});
+  const DestinationActionScreen({super.key, required this.destination});
+
+  String get destinationName => destination.regionName;
 
   @override
   Widget build(BuildContext context) {
@@ -36,15 +39,15 @@ class DestinationActionScreen extends StatelessWidget {
               Expanded(
                 child: _buildActionCard(
                   context,
-                  title: "추천 여행지 경로",
+                  title: "추천 관광지 보러가기",
                   imagePath: 'assets/images/dest1.png',
                   onTap: () {
                     // 🌟 누르면 기존에 만들었던 상세(코스) 화면으로 넘어갑니다!
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => DestinationDetailScreen(
-                            destinationName: destinationName),
+                        builder: (context) =>
+                            DestinationDetailScreen(destination: destination),
                       ),
                     );
                   },
@@ -65,7 +68,9 @@ class DestinationActionScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const PictureDiaryScreen(),
+                        builder: (context) => PictureDiaryScreen(
+                          savedRegionId: destination.id,
+                        ),
                       ),
                     );
                   },

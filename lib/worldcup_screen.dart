@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'gacha_screen.dart'; // 가챠 스크린 연결
 import 'preference_service.dart';
+import 'recommendation_service.dart';
 
 class RoundItem {
   final String labelA;
@@ -307,12 +308,12 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
                               alignment: Alignment.topCenter,
                               child: Padding(
                                 padding: EdgeInsets.only(top: 60.0),
-                                child: Text(
-                                  "나의 여행 취향 보드",
-                                  style: TextStyle(
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF4A7C59),
+                                child: SizedBox(
+                                  width: 230,
+                                  height: 68,
+                                  child: Image(
+                                    image: AssetImage('assets/images/logo.png'),
+                                    fit: BoxFit.contain,
                                   ),
                                 ),
                               ),
@@ -452,11 +453,16 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
                 ? null
                 : () {
                     if (_savedPreferenceId != null) {
+                      final recommendationFuture =
+                          RecommendationService.create(_savedPreferenceId!);
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (context) =>
-                                GachaScreen(preferenceId: _savedPreferenceId!)),
+                          builder: (context) => GachaScreen(
+                            preferenceId: _savedPreferenceId!,
+                            recommendationFuture: recommendationFuture,
+                          ),
+                        ),
                       );
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(

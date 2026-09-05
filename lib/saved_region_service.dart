@@ -5,11 +5,48 @@ import 'package:http/http.dart' as http;
 
 import 'auth_service.dart';
 
+class SavedSpot {
+  final String contentId;
+  final String name;
+  final String categoryLabel;
+  final bool isAnchor;
+
+  const SavedSpot({
+    required this.contentId,
+    required this.name,
+    required this.categoryLabel,
+    required this.isAnchor,
+  });
+
+  factory SavedSpot.fromJson(Map<String, dynamic> json) {
+    final contentId = json['content_id'];
+    final name = json['name'];
+    final categoryLabel = json['category_label'];
+    if (name is! String || name.trim().isEmpty) {
+      throw const FormatException('저장된 장소 응답 형식이 올바르지 않습니다.');
+    }
+
+    return SavedSpot(
+      contentId: contentId is String ? contentId : '',
+      name: name.trim(),
+      categoryLabel: categoryLabel is String && categoryLabel.trim().isNotEmpty
+          ? categoryLabel.trim()
+          : '기타',
+      isAnchor: json['is_anchor'] == true,
+    );
+  }
+}
+
 class SavedRegion {
   final int id;
   final String regionName;
+  final List<SavedSpot> spots;
 
-  const SavedRegion({required this.id, required this.regionName});
+  const SavedRegion({
+    required this.id,
+    required this.regionName,
+    required this.spots,
+  });
 
   factory SavedRegion.fromJson(Map<String, dynamic> json) {
     final id = json['id'];
@@ -17,7 +54,21 @@ class SavedRegion {
     if (id is! int || regionName is! String || regionName.trim().isEmpty) {
       throw const FormatException('저장된 여행지 응답 형식이 올바르지 않습니다.');
     }
-    return SavedRegion(id: id, regionName: regionName.trim());
+    final spotsJson = json['spots'] ?? json['saved_spots'];
+    final spots = <SavedSpot>[];
+    if (spotsJson is List) {
+      for (final spotJson in spotsJson) {
+        if (spotJson is Map<String, dynamic>) {
+          spots.add(SavedSpot.fromJson(spotJson));
+        }
+      }
+    }
+
+    return SavedRegion(
+      id: id,
+      regionName: regionName.trim(),
+      spots: List.unmodifiable(spots),
+    );
   }
 }
 
@@ -83,6 +134,7 @@ class SavedRegionService {
         'name': regionName.trim(),
         'latitude': candidate['latitude'],
         'longitude': candidate['longitude'],
+        'category_label': candidate['category_label'],
         'is_anchor': true,
       },
     ];
@@ -99,6 +151,7 @@ class SavedRegionService {
           'name': spotName,
           'latitude': spot['latitude'],
           'longitude': spot['longitude'],
+          'category_label': spot['category_label'],
           'is_anchor': false,
         });
       }
@@ -132,6 +185,8 @@ class SavedRegionService {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('여행지 저장 실패 (${response.statusCode})');
     }
+
+    _cachedRegions = null;
   }
 
   static Future<void> remove(int savedRegionId) async {

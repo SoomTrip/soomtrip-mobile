@@ -1,9 +1,15 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:soomtrip/my_destination_screen.dart';
 
 import 'auth_service.dart';
 import 'friend_service.dart';
+import 'saved_region_service.dart';
 import 'splash_screen.dart';
 
 class MyPageScreen extends StatefulWidget {
@@ -14,27 +20,224 @@ class MyPageScreen extends StatefulWidget {
 }
 
 class _MyPageScreenState extends State<MyPageScreen> {
+  static const _profileAssetKey = 'my_page_profile_asset';
+  static const _profileBytesKey = 'my_page_profile_bytes';
+  static const _defaultProfileAssets = [
+    'assets/images/profile1.jpeg',
+    'assets/images/profile2.jpeg',
+    'assets/images/profile3.jpeg',
+    'assets/images/profile4.jpeg',
+    'assets/images/profile5.jpeg',
+  ];
+
   bool _isLoggingOut = false;
   String? _userCode;
   String? _nickname;
+  String? _profileImageUrl;
+  String? _selectedProfileAsset;
+  Uint8List? _selectedProfileBytes;
+  int? _savedDestinationCount;
 
   @override
   void initState() {
     super.initState();
+    _savedDestinationCount = SavedRegionService.cachedRegions?.length;
     _loadUserProfile();
+    _loadSavedDestinationCount();
+  }
+
+  Future<void> _loadSavedDestinationCount() async {
+    try {
+      final savedRegions = await SavedRegionService.getAll();
+      if (!mounted) return;
+      setState(() => _savedDestinationCount = savedRegions.length);
+    } catch (error) {
+      debugPrint('[My Page] Failed to load saved region count: $error');
+    }
   }
 
   Future<void> _loadUserProfile() async {
+    final preferences = await SharedPreferences.getInstance();
+    final savedAsset = preferences.getString(_profileAssetKey);
+    final savedBytes = preferences.getString(_profileBytesKey);
+    Uint8List? decodedBytes;
+    if (savedBytes != null) {
+      try {
+        decodedBytes = base64Decode(savedBytes);
+      } on FormatException {
+        await preferences.remove(_profileBytesKey);
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _selectedProfileAsset = savedAsset;
+        _selectedProfileBytes = decodedBytes;
+      });
+    }
+
     try {
       final user = await FriendService.getMe();
       if (mounted) {
         setState(() {
           _userCode = user.userCode;
           _nickname = user.nickname;
+          _profileImageUrl ??= user.profileImage;
         });
       }
     } catch (error) {
       debugPrint('[My Page] Failed to load user profile: $error');
+    }
+
+    try {
+      final kakaoUser = await UserApi.instance.me();
+      final kakaoProfile = kakaoUser.kakaoAccount?.profile;
+      if (!mounted) return;
+
+      setState(() {
+        final nickname = kakaoProfile?.nickname?.trim();
+        if (nickname != null && nickname.isNotEmpty) {
+          _nickname = nickname;
+        }
+
+        final profileImageUrl = kakaoProfile?.profileImageUrl?.trim();
+        if (profileImageUrl != null && profileImageUrl.isNotEmpty) {
+          _profileImageUrl = profileImageUrl;
+        }
+      });
+    } catch (error) {
+      debugPrint('[My Page] Failed to load Kakao profile: $error');
+    }
+  }
+
+  Future<void> _showProfileImagePicker() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFFFBF9F4),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '프로필 사진 선택',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                '기본 이미지를 고르거나 + 버튼으로 사진을 추가해 보세요.',
+                style: TextStyle(color: Colors.black54),
+              ),
+              const SizedBox(height: 20),
+              Wrap(
+                spacing: 14,
+                runSpacing: 14,
+                children: [
+                  for (final asset in _defaultProfileAssets)
+                    _buildProfileOption(
+                      image: AssetImage(asset),
+                      isSelected: _selectedProfileAsset == asset,
+                      onTap: () async {
+                        Navigator.pop(sheetContext);
+                        await _selectDefaultProfile(asset);
+                      },
+                    ),
+                  _buildGalleryOption(sheetContext),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileOption({
+    required ImageProvider image,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 68,
+        height: 68,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isSelected ? const Color(0xFF4A7C59) : Colors.transparent,
+            width: 3,
+          ),
+        ),
+        child: CircleAvatar(backgroundImage: image),
+      ),
+    );
+  }
+
+  Widget _buildGalleryOption(BuildContext sheetContext) {
+    return GestureDetector(
+      onTap: () async {
+        Navigator.pop(sheetContext);
+        await _pickProfileFromGallery();
+      },
+      child: Container(
+        width: 68,
+        height: 68,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFD9E4D6), width: 2),
+        ),
+        child:
+            const Icon(Icons.add_rounded, size: 34, color: Color(0xFF4A7C59)),
+      ),
+    );
+  }
+
+  Future<void> _selectDefaultProfile(String asset) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_profileAssetKey, asset);
+    await preferences.remove(_profileBytesKey);
+    if (!mounted) return;
+    setState(() {
+      _selectedProfileAsset = asset;
+      _selectedProfileBytes = null;
+    });
+  }
+
+  Future<void> _pickProfileFromGallery() async {
+    try {
+      final image = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 600,
+        imageQuality: 80,
+      );
+      if (image == null) return;
+
+      final imageBytes = await image.readAsBytes();
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString(
+        _profileBytesKey,
+        base64Encode(imageBytes),
+      );
+      await preferences.remove(_profileAssetKey);
+      if (!mounted) return;
+      setState(() {
+        _selectedProfileBytes = imageBytes;
+        _selectedProfileAsset = null;
+      });
+    } catch (error) {
+      debugPrint('[My Page] Failed to pick profile image: $error');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('사진을 불러오지 못했어요. 다시 시도해 주세요.')),
+      );
     }
   }
 
@@ -206,22 +409,19 @@ class _MyPageScreenState extends State<MyPageScreen> {
           // 프사 영역
           Stack(
             children: [
-              const CircleAvatar(
-                radius: 35,
-                backgroundColor: Colors.white,
-                // 나중에 실제 유저 프사로 변경
-                child: Icon(Icons.face_retouching_natural,
-                    size: 45, color: Color(0xFF8B5A2B)),
-              ),
+              _buildProfileImage(),
               Positioned(
                 bottom: 0,
                 right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                      color: Colors.white, shape: BoxShape.circle),
-                  child: const Icon(Icons.camera_alt_outlined,
-                      size: 16, color: Color(0xFF4A7C59)),
+                child: GestureDetector(
+                  onTap: _showProfileImagePicker,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                        color: Colors.white, shape: BoxShape.circle),
+                    child: const Icon(Icons.camera_alt_outlined,
+                        size: 16, color: Color(0xFF4A7C59)),
+                  ),
                 ),
               ),
             ],
@@ -263,18 +463,65 @@ class _MyPageScreenState extends State<MyPageScreen> {
     );
   }
 
+  Widget _buildProfileImage() {
+    final selectedBytes = _selectedProfileBytes;
+    final selectedAsset = _selectedProfileAsset;
+    final imageUrl = _profileImageUrl;
+
+    return CircleAvatar(
+      radius: 35,
+      backgroundColor: Colors.white,
+      child: ClipOval(
+        child: selectedBytes != null
+            ? Image.memory(
+                selectedBytes,
+                width: 70,
+                height: 70,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _buildDefaultProfileIcon(),
+              )
+            : selectedAsset != null
+                ? Image.asset(
+                    selectedAsset,
+                    width: 70,
+                    height: 70,
+                    fit: BoxFit.cover,
+                  )
+                : imageUrl == null
+                    ? _buildDefaultProfileIcon()
+                    : Image.network(
+                        imageUrl,
+                        width: 70,
+                        height: 70,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            _buildDefaultProfileIcon(),
+                      ),
+      ),
+    );
+  }
+
+  Widget _buildDefaultProfileIcon() {
+    return const Icon(
+      Icons.face_retouching_natural,
+      size: 45,
+      color: Color(0xFF8B5A2B),
+    );
+  }
+
   // ==========================================
   // 3. 저장한 여행지 카드
   // ==========================================
   Widget _buildSavedDestinationsCard(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => const MyDestinationsScreen(),
           ),
         );
+        if (context.mounted) await _loadSavedDestinationCount();
       },
       child: Container(
         padding: const EdgeInsets.all(20),
@@ -303,19 +550,21 @@ class _MyPageScreenState extends State<MyPageScreen> {
                 ),
                 const SizedBox(height: 12),
                 RichText(
-                  text: const TextSpan(
-                    style: TextStyle(
+                  text: TextSpan(
+                    style: const TextStyle(
                         fontSize: 14,
                         color: Colors.black87,
                         fontFamily: 'CustomFont'), // 폰트 패밀리 적용 필요
                     children: [
-                      TextSpan(text: "총 "),
+                      const TextSpan(text: "총 "),
                       TextSpan(
-                          text: "28곳",
-                          style: TextStyle(
+                          text: _savedDestinationCount == null
+                              ? "-곳"
+                              : "${_savedDestinationCount!}곳",
+                          style: const TextStyle(
                               color: Color(0xFF4A7C59),
                               fontWeight: FontWeight.bold)),
-                      TextSpan(text: "을 저장했어요"),
+                      const TextSpan(text: "을 저장했어요"),
                     ],
                   ),
                 ),

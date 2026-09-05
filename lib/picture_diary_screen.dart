@@ -1,12 +1,14 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:flutter_drawing_board/flutter_drawing_board.dart';
 import 'package:flutter_drawing_board/paint_contents.dart';
 
+import 'diary_entry_service.dart';
+
 class PictureDiaryScreen extends StatefulWidget {
-  const PictureDiaryScreen({super.key});
+  final int savedRegionId;
+
+  const PictureDiaryScreen({super.key, required this.savedRegionId});
 
   @override
   State<PictureDiaryScreen> createState() => _PictureDiaryScreenState();
@@ -15,12 +17,19 @@ class PictureDiaryScreen extends StatefulWidget {
 class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
   // 날씨 상태 관리
   String selectedWeather = 'sun';
-  String? mode;
-  String? imagePath;
+  DateTime _selectedDate = DateTime.now();
 
   // 그림 그리기 컨트롤러 및 도구 상태[cite: 5]
   final DrawingController _drawingController = DrawingController();
   final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _messageController = TextEditingController();
+  DiaryEntry? _entry;
+  String? _savedImageUrl;
+  String? _displayImageUrl;
+  bool _isLoading = true;
+  bool _isSaving = false;
+  bool _allowPop = false;
+  bool _isDrawingMode = true;
   Color _customColor = Colors.purple;
   Color _penColor = Colors.black87;
   double _penWidth = 8;
@@ -50,22 +59,139 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
     Color(0xFF212121),
   ];
 
-  Future<void> _pickImage() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+  @override
+  void initState() {
+    super.initState();
+    _loadEntry();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _applyCurrentStyle();
+    });
+  }
 
-    if (image != null) {
-      setState(() {
-        imagePath = image.path;
-        mode = 'photo';
+  Future<void> _loadEntry() async {
+    try {
+      final entry =
+          await DiaryEntryService.getBySavedRegion(widget.savedRegionId);
+      if (!mounted) return;
+      if (entry != null) {
+        _entry = entry;
+        _titleController.text = entry.title ?? '';
+        _messageController.text = entry.message ?? '';
+        _selectedDate = entry.date;
+        selectedWeather = _weatherForUi(entry.weather);
+        _savedImageUrl = entry.imageUrl;
+        _displayImageUrl = entry.signedImageUrl ?? entry.imageUrl;
+        _isDrawingMode = _displayImageUrl == null;
+      }
+    } catch (error) {
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(error.toString().replaceFirst('Exception: ', ''))),
+        );
       });
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  String _weatherForUi(String? weather) => switch (weather) {
+        'sunny' => 'sun',
+        'cloudy' => 'cloud',
+        'rainy' => 'rain',
+        'snowy' => 'snow',
+        _ => 'sun',
+      };
+
+  String get _weatherForApi => switch (selectedWeather) {
+        'cloud' => 'cloudy',
+        'rain' => 'rainy',
+        'snow' => 'snowy',
+        _ => 'sunny',
+      };
+
+  Future<void> _saveAndPop() async {
+    if (_isSaving || _isLoading) return;
+    FocusScope.of(context).unfocus();
+    setState(() => _isSaving = true);
+    try {
+      var imageUrl = _savedImageUrl;
+      if (_isDrawingMode) {
+        // 기기 해상도 대신 1배 크기로 렌더링해 업로드 용량을 줄인다.
+        final imageData = await _drawingController.getImageData(pixelRatio: 1);
+        if (imageData != null) {
+          imageUrl = await DiaryEntryService.uploadImage(
+            imageData.buffer.asUint8List(
+              imageData.offsetInBytes,
+              imageData.lengthInBytes,
+            ),
+          );
+        }
+      }
+
+      await DiaryEntryService.save(
+        savedRegionId: widget.savedRegionId,
+        diaryEntryId: _entry?.id,
+        title: _titleController.text,
+        message: _messageController.text,
+        imageUrl: imageUrl,
+        weather: _weatherForApi,
+        date: _selectedDate,
+      );
+      if (mounted) {
+        setState(() => _allowPop = true);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) Navigator.pop(context);
+        });
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(error.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
+  }
+
+  String get _formattedDate {
+    const weekdays = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'];
+    return '${_selectedDate.month}월 ${_selectedDate.day}일 ${weekdays[_selectedDate.weekday - 1]}';
+  }
+
+  Future<void> _selectDate() async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+                primary: const Color(0xFF4A7C59),
+                onPrimary: Colors.white,
+              ),
+          datePickerTheme: const DatePickerThemeData(
+            backgroundColor: Color(0xFFF4F7F0),
+          ),
+          dialogTheme: const DialogThemeData(
+            backgroundColor: Color(0xFFF4F7F0),
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (pickedDate == null || !mounted) return;
+    setState(() => _selectedDate = pickedDate);
   }
 
   @override
   void dispose() {
     _drawingController.dispose();
     _titleController.dispose();
+    _messageController.dispose();
     super.dispose();
   }
 
@@ -73,184 +199,236 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
   Widget build(BuildContext context) {
     final keyboardHeight = MediaQuery.viewInsetsOf(context).bottom;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFFBF9F4),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        toolbarHeight: 44,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new_rounded,
-            color: Colors.black87,
-            size: 20,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: TextField(
-          controller: _titleController,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => FocusScope.of(context).unfocus(),
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF333333),
-            fontFamily: 'CustomFont',
-          ),
-          decoration: const InputDecoration(
-            hintText: '제목을 수정해주세요',
-            hintStyle: TextStyle(
-              color: Colors.grey,
-              fontWeight: FontWeight.normal,
+    return PopScope(
+      canPop: _allowPop,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _saveAndPop();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFBF9F4),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          toolbarHeight: 44,
+          leading: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: Colors.black87,
+              size: 20,
             ),
-            border: InputBorder.none,
-            isDense: true,
+            onPressed: _isSaving ? null : _saveAndPop,
+          ),
+          title: TextField(
+            controller: _titleController,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => FocusScope.of(context).unfocus(),
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF333333),
+              fontFamily: 'CustomFont',
+            ),
+            decoration: const InputDecoration(
+              hintText: '제목을 수정해주세요',
+              hintStyle: TextStyle(
+                color: Colors.grey,
+                fontWeight: FontWeight.normal,
+              ),
+              border: InputBorder.none,
+              isDense: true,
+            ),
           ),
         ),
-      ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final diaryHeight = constraints.maxHeight + keyboardHeight;
-            final writingFontSize = (diaryHeight * 20 / 700).clamp(16.0, 24.0);
-            final writingStyle = TextStyle(
-              fontSize: writingFontSize,
-              height: 2.2,
-              color: const Color(0xFF333333),
-              fontFamily: 'CustomFont',
-            );
-            final writingWidth =
-                (constraints.maxWidth - 64).clamp(1.0, double.infinity);
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : SafeArea(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final diaryHeight = constraints.maxHeight + keyboardHeight;
+                    final writingFontSize =
+                        (diaryHeight * 20 / 700).clamp(16.0, 24.0);
+                    final writingStyle = TextStyle(
+                      fontSize: writingFontSize,
+                      height: 2.2,
+                      color: const Color(0xFF333333),
+                      fontFamily: 'CustomFont',
+                    );
+                    final writingWidth =
+                        (constraints.maxWidth - 64).clamp(1.0, double.infinity);
 
-            return SingleChildScrollView(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              child: SizedBox(
-                width: constraints.maxWidth,
-                height: diaryHeight,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // ==========================================
-                    // 1. 맨 밑바탕에 다이어리 테두리(diary.png) 깔기
-                    // ==========================================
-                    Image.asset(
-                      'assets/images/diary.png',
-                      fit: BoxFit.fill, // 기기 화면 비율에 맞게 꽉 채움
-                    ),
+                    return SingleChildScrollView(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      child: SizedBox(
+                        width: constraints.maxWidth,
+                        height: diaryHeight,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            // ==========================================
+                            // 1. 맨 밑바탕에 다이어리 테두리(diary.png) 깔기
+                            // ==========================================
+                            Image.asset(
+                              'assets/images/diary.png',
+                              fit: BoxFit.fill, // 기기 화면 비율에 맞게 꽉 채움
+                            ),
 
-                    // ==========================================
-                    // 2. 다이어리 칸에 맞춰 내용물 배치하기
-                    // ==========================================
-                    Padding(
-                      // 🌟 테두리 두께에 맞춰 패딩을 조절하세요! (기기마다 다를 수 있음)
-                      padding: const EdgeInsets.only(
-                          top: 16.0, bottom: 20.0, left: 16.0, right: 16.0),
-                      child: Column(
-                        children: [
-                          // ----------------------------------------
-                          // [상단 영역] 날짜 & 날씨 (비율 대략 12%)
-                          // ----------------------------------------
-                          Expanded(
-                            flex: 12,
-                            child: Row(
-                              children: [
-                                // [왼쪽 위 칸] 날짜
-                                Expanded(
-                                  flex: 1,
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Text(
-                                        "9월 30일 월요일",
-                                        style: TextStyle(
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.bold,
-                                            fontFamily: 'CustomFont'),
+                            // ==========================================
+                            // 2. 다이어리 칸에 맞춰 내용물 배치하기
+                            // ==========================================
+                            Padding(
+                              // 🌟 테두리 두께에 맞춰 패딩을 조절하세요! (기기마다 다를 수 있음)
+                              padding: const EdgeInsets.only(
+                                  top: 16.0,
+                                  bottom: 20.0,
+                                  left: 16.0,
+                                  right: 7.0),
+                              child: Column(
+                                children: [
+                                  // ----------------------------------------
+                                  // [상단 영역] 날짜 & 날씨 (비율 대략 12%)
+                                  // ----------------------------------------
+                                  Expanded(
+                                    flex: 12,
+                                    child: Row(
+                                      children: [
+                                        // [왼쪽 위 칸] 날짜
+                                        Expanded(
+                                          flex: 5,
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(
+                                                left: 8, right: 0),
+                                            child: Transform.translate(
+                                              offset: const Offset(4, 0),
+                                              child: Align(
+                                                alignment:
+                                                    Alignment.centerRight,
+                                                child: FittedBox(
+                                                  fit: BoxFit.scaleDown,
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Text(
+                                                        _formattedDate,
+                                                        style: const TextStyle(
+                                                            fontSize: 18,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            fontFamily:
+                                                                'CustomFont'),
+                                                      ),
+                                                      IconButton(
+                                                        onPressed: _selectDate,
+                                                        tooltip: '날짜 선택',
+                                                        padding:
+                                                            EdgeInsets.zero,
+                                                        constraints:
+                                                            const BoxConstraints(
+                                                          minWidth: 24,
+                                                          minHeight: 24,
+                                                        ),
+                                                        icon: const Icon(
+                                                          Icons
+                                                              .calendar_month_outlined,
+                                                          size: 20,
+                                                          color: Colors.black87,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        // [오른쪽 위 칸] 날씨
+                                        Expanded(
+                                          flex: 6,
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              const Text("날씨 ",
+                                                  style: TextStyle(
+                                                      fontSize: 17,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontFamily:
+                                                          'CustomFont')),
+                                              _buildWeatherIcon('sun',
+                                                  Icons.wb_sunny_outlined),
+                                              _buildWeatherIcon('cloud',
+                                                  Icons.cloud_queue_rounded),
+                                              _buildWeatherIcon('rain',
+                                                  Icons.water_drop_outlined),
+                                              _buildWeatherIcon('snow',
+                                                  Icons.ac_unit_rounded),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  // ----------------------------------------
+                                  // [중단 영역] 그림판 (비율 대략 53%)
+                                  // ----------------------------------------
+                                  Expanded(
+                                    flex: 51,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(4.0),
+                                      child: _buildCanvasArea(),
+                                    ),
+                                  ),
+
+                                  // ----------------------------------------
+                                  // [하단 영역] 글쓰기 (비율 대략 35%)
+                                  // ----------------------------------------
+                                  Expanded(
+                                    flex: 37,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16.0, vertical: 8.0),
+                                      child: TextField(
+                                        controller: _messageController,
+                                        maxLines: 5,
+                                        scrollPhysics:
+                                            const NeverScrollableScrollPhysics(),
+                                        inputFormatters: [
+                                          _MaxVisualLinesInputFormatter(
+                                            maxLines: 5,
+                                            maxWidth: writingWidth,
+                                            style: writingStyle,
+                                            textDirection:
+                                                Directionality.of(context),
+                                            textScaler: MediaQuery.textScalerOf(
+                                                context),
+                                          ),
+                                        ],
+                                        scrollPadding: EdgeInsets.only(
+                                          bottom: keyboardHeight + 24,
+                                        ),
+                                        style: writingStyle,
+                                        decoration: InputDecoration(
+                                          hintText: "오늘의 여행을 기록해 보세요...",
+                                          hintStyle: TextStyle(
+                                              color: Colors.grey.shade400),
+                                          border: InputBorder.none,
+                                        ),
                                       ),
-                                    ],
-                                  ),
-                                ),
-                                // [오른쪽 위 칸] 날씨
-                                Expanded(
-                                  flex: 1,
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Text("날씨 ",
-                                          style: TextStyle(
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.bold,
-                                              fontFamily: 'CustomFont')),
-                                      _buildWeatherIcon(
-                                          'sun', Icons.wb_sunny_outlined),
-                                      _buildWeatherIcon(
-                                          'cloud', Icons.cloud_queue_rounded),
-                                      _buildWeatherIcon(
-                                          'rain', Icons.water_drop_outlined),
-                                      _buildWeatherIcon(
-                                          'snow', Icons.ac_unit_rounded),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // ----------------------------------------
-                          // [중단 영역] 그림판 (비율 대략 53%)
-                          // ----------------------------------------
-                          Expanded(
-                            flex: 51,
-                            child: Padding(
-                              padding: const EdgeInsets.all(4.0),
-                              child: _buildCanvasArea(),
-                            ),
-                          ),
-
-                          // ----------------------------------------
-                          // [하단 영역] 글쓰기 (비율 대략 35%)
-                          // ----------------------------------------
-                          Expanded(
-                            flex: 37,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16.0, vertical: 8.0),
-                              child: TextField(
-                                maxLines: 5,
-                                scrollPhysics:
-                                    const NeverScrollableScrollPhysics(),
-                                inputFormatters: [
-                                  _MaxVisualLinesInputFormatter(
-                                    maxLines: 5,
-                                    maxWidth: writingWidth,
-                                    style: writingStyle,
-                                    textDirection: Directionality.of(context),
-                                    textScaler:
-                                        MediaQuery.textScalerOf(context),
+                                    ),
                                   ),
                                 ],
-                                scrollPadding: EdgeInsets.only(
-                                  bottom: keyboardHeight + 24,
-                                ),
-                                style: writingStyle,
-                                decoration: InputDecoration(
-                                  hintText: "오늘의 여행을 기록해 보세요...",
-                                  hintStyle:
-                                      TextStyle(color: Colors.grey.shade400),
-                                  border: InputBorder.none,
-                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
-            );
-          },
-        ),
       ),
     );
   }
@@ -262,17 +440,18 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
       onTap: () => setState(() => selectedWeather = weatherCode),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 2),
-        width: 30, // 칸에 맞게 살짝 줄임
-        height: 30,
+        width: 27,
+        height: 27,
         child: Stack(
+          clipBehavior: Clip.none,
           alignment: Alignment.center,
           children: [
-            Icon(iconData, size: 22, color: Colors.black87),
+            Icon(iconData, size: 20, color: Colors.black87),
             if (isSelected)
               Image.asset(
-                'assets/images/crayon_circle.png',
-                width: 34,
-                height: 34,
+                'assets/images/red_circle.png',
+                width: 42,
+                height: 42,
                 errorBuilder: (context, error, stackTrace) => Container(
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey.shade400, width: 2),
@@ -288,103 +467,87 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
 
   // 🎨 캔버스 분기 처리 위젯[cite: 5]
   Widget _buildCanvasArea() {
-    if (mode == null) {
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _buildSelectButton("사진 넣기 📷", _pickImage),
-          const SizedBox(width: 20),
-          _buildSelectButton("그림 그리기 🖍️", _startDrawing),
-        ],
-      );
-    } else if (mode == 'photo') {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.file(File(imagePath!), fit: BoxFit.cover),
-          Positioned(
-            top: 10,
-            right: 10,
-            child: IconButton(
-              icon: const Icon(Icons.refresh,
-                  color: Colors.white,
-                  shadows: [Shadow(color: Colors.black, blurRadius: 4)]),
-              onPressed: () => setState(() => mode = null),
-            ),
-          ),
-        ],
-      );
-    } else {
+    if (!_isDrawingMode && _displayImageUrl != null) {
       return Column(
         children: [
-          // 위쪽 툴바 (다이어리 배경에 스며들도록 테두리 제거)
-          Container(
-            width: double.infinity,
+          SizedBox(
             height: 46,
-            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
-            decoration: const BoxDecoration(
-              color: Colors.transparent, // 투명하게 변경
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildToolButton(
-                    Icons.close,
-                    () => setState(() {
-                          _drawingController.clear();
-                          mode = null;
-                        })),
-                _buildColorBtn(Colors.redAccent),
-                _buildColorBtn(Colors.orange),
-                _buildColorBtn(Colors.green),
-                _buildColorBtn(Colors.blue),
-                _buildColorBtn(Colors.black87),
-                _buildCustomColorBtn(),
-                _buildToolButton(Icons.cleaning_services_rounded, () {
-                  setState(() => _isEraser = true);
-                  _applyCurrentStyle();
-                }, selected: _isEraser),
-                _buildToolButton(Icons.line_weight, _showWidthPicker),
-              ],
+            child: TextButton.icon(
+              onPressed: () {
+                _drawingController.clear();
+                setState(() => _isDrawingMode = true);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _applyCurrentStyle();
+                });
+              },
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('처음부터 다시 그리기'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF4A7C59),
+              ),
             ),
           ),
           Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return DrawingBoard(
-                  controller: _drawingController,
-                  // 배경을 투명하게 해서 diary.png의 하얀 속지가 보이게 함
-                  background: Container(
-                    width: constraints.maxWidth,
-                    height: constraints.maxHeight,
-                    color: Colors.transparent,
-                  ),
-                );
-              },
+            child: Image.network(
+              _displayImageUrl!,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Center(
+                child: Text('저장된 그림을 불러오지 못했어요.'),
+              ),
             ),
           ),
         ],
       );
     }
-  }
 
-  Widget _buildSelectButton(String title, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.8), // 투명도 살짝 줌
-          border: Border.all(color: Colors.black87, width: 2), // 다이어리 느낌 테두리
-          borderRadius: BorderRadius.circular(16),
+    return Column(
+      children: [
+        // 위쪽 툴바 (다이어리 배경에 스며들도록 테두리 제거)
+        Container(
+          width: double.infinity,
+          height: 46,
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+          decoration: const BoxDecoration(
+            color: Colors.transparent, // 투명하게 변경
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildToolButton(
+                  Icons.close,
+                  () => setState(() {
+                        _drawingController.clear();
+                      })),
+              _buildColorBtn(Colors.redAccent),
+              _buildColorBtn(Colors.orange),
+              _buildColorBtn(Colors.green),
+              _buildColorBtn(Colors.blue),
+              _buildColorBtn(Colors.black87),
+              _buildCustomColorBtn(),
+              _buildToolButton(Icons.cleaning_services_rounded, () {
+                setState(() => _isEraser = true);
+                _applyCurrentStyle();
+              }, selected: _isEraser),
+              _buildToolButton(Icons.line_weight, _showWidthPicker),
+            ],
+          ),
         ),
-        child: Text(title,
-            style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87)),
-      ),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return DrawingBoard(
+                controller: _drawingController,
+                // 배경을 투명하게 해서 diary.png의 하얀 속지가 보이게 함
+                background: Container(
+                  width: constraints.maxWidth,
+                  height: constraints.maxHeight,
+                  color: Colors.transparent,
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -447,6 +610,7 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
     final selectedColor = await showDialog<Color>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFF4F7F0),
         title: const Text('색상 선택'),
         content: SizedBox(
           width: 280,
@@ -483,13 +647,6 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
     _applyCurrentStyle();
   }
 
-  void _startDrawing() {
-    setState(() => mode = 'draw');
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _applyCurrentStyle();
-    });
-  }
-
   void _applyCurrentStyle() {
     _drawingController.setPaintContent(
       _isEraser ? Eraser() : SimpleLine(),
@@ -519,6 +676,7 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFFF4F7F0),
           insetPadding: const EdgeInsets.symmetric(horizontal: 28),
           title: Text(_isEraser ? '지우개 굵기' : '펜 굵기'),
           titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
@@ -543,22 +701,31 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
                                 shape: BoxShape.circle)))),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Slider(
-                    value: width,
-                    min: 2,
-                    max: 30,
-                    divisions: 28,
-                    onChanged: (value) {
-                      setDialogState(() => width = value);
-                      setState(() {
-                        if (_isEraser) {
-                          _eraserWidth = value;
-                        } else {
-                          _penWidth = value;
-                        }
-                      });
-                      _applyCurrentStyle();
-                    },
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      overlayColor:
+                          const Color(0xFF4A7C59).withValues(alpha: 0.15),
+                    ),
+                    child: Slider(
+                      value: width,
+                      min: 2,
+                      max: 30,
+                      divisions: 28,
+                      activeColor: const Color(0xFF4A7C59),
+                      inactiveColor: const Color(0xFFC8DCCB),
+                      thumbColor: const Color(0xFF4A7C59),
+                      onChanged: (value) {
+                        setDialogState(() => width = value);
+                        setState(() {
+                          if (_isEraser) {
+                            _eraserWidth = value;
+                          } else {
+                            _penWidth = value;
+                          }
+                        });
+                        _applyCurrentStyle();
+                      },
+                    ),
                   ),
                 ),
                 SizedBox(width: 28, child: Text(width.round().toString())),
@@ -567,8 +734,12 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('완료'))
+              onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF4A7C59),
+              ),
+              child: const Text('완료'),
+            )
           ],
         ),
       ),

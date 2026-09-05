@@ -37,11 +37,14 @@ dependencies:
   cupertino_icons: ^1.0.8
   bouncy_background: ^1.0.4
   http: ^1.6.0
+  http_parser: ^4.1.2
   kakao_flutter_sdk_user: ^2.0.0+1
   shared_preferences: ^2.5.5
   flutter_dotenv: ^6.0.1
   image_picker: ^1.2.3
   flutter_drawing_board: ^1.0.1+2
+  animated_text_kit: ^4.2.3
+  flutter_naver_map: ^1.4.4
 
 dev_dependencies:
   flutter_test:

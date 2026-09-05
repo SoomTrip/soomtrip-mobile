@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'worldcup_screen.dart';
 import 'my_page_screen.dart';
 import 'friends_screen.dart';
+import 'home_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -18,7 +19,7 @@ class _MainScreenState extends State<MainScreen> {
   // Hot Reload 후에도 탭 구성이 즉시 반영되도록 매번 현재 목록을 반환합니다.
   List<Widget> get _pages => const [
         WorldCupScreen(),
-        _HomeScreen(),
+        HomeScreen(),
         FriendsScreen(),
         MyPageScreen(),
       ];
