@@ -6,16 +6,22 @@ import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 
 class SavedSpot {
+  final int? id;
   final String contentId;
   final String name;
   final String categoryLabel;
   final bool isAnchor;
+  final double? latitude;
+  final double? longitude;
 
   const SavedSpot({
+    required this.id,
     required this.contentId,
     required this.name,
     required this.categoryLabel,
     required this.isAnchor,
+    required this.latitude,
+    required this.longitude,
   });
 
   factory SavedSpot.fromJson(Map<String, dynamic> json) {
@@ -27,13 +33,21 @@ class SavedSpot {
     }
 
     return SavedSpot(
+      id: json['id'] is int ? json['id'] as int : null,
       contentId: contentId is String ? contentId : '',
       name: name.trim(),
       categoryLabel: categoryLabel is String && categoryLabel.trim().isNotEmpty
           ? categoryLabel.trim()
           : '기타',
       isAnchor: json['is_anchor'] == true,
+      latitude: _coordinate(json['latitude'] ?? json['lat']),
+      longitude: _coordinate(json['longitude'] ?? json['lng']),
     );
+  }
+
+  static double? _coordinate(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '');
   }
 }
 
@@ -93,6 +107,7 @@ class SavedRegionService {
     ).timeout(const Duration(seconds: 15));
 
     debugPrint('[Saved Region API] GET status: ${response.statusCode}');
+    debugPrint('[Saved Region API] GET response: ${response.body}');
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('저장한 여행지 불러오기 실패 (${response.statusCode})');
@@ -132,8 +147,8 @@ class SavedRegionService {
       {
         'content_id': contentId,
         'name': regionName.trim(),
-        'latitude': candidate['latitude'],
-        'longitude': candidate['longitude'],
+        'latitude': candidate['latitude'] ?? candidate['lat'],
+        'longitude': candidate['longitude'] ?? candidate['lng'],
         'category_label': candidate['category_label'],
         'is_anchor': true,
       },
@@ -149,8 +164,8 @@ class SavedRegionService {
         spots.add({
           'content_id': spotContentId,
           'name': spotName,
-          'latitude': spot['latitude'],
-          'longitude': spot['longitude'],
+          'latitude': spot['latitude'] ?? spot['lat'],
+          'longitude': spot['longitude'] ?? spot['lng'],
           'category_label': spot['category_label'],
           'is_anchor': false,
         });

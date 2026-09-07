@@ -1,8 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart'; // 🌟 네이버 지도 임포트
 
+import 'route_service.dart';
+import 'saved_region_service.dart';
+
 class RouteScreen extends StatefulWidget {
-  const RouteScreen({super.key});
+  final int savedRegionId;
+  final String travelPeriod;
+  final List<SavedSpot> selectedSpots;
+
+  const RouteScreen({
+    super.key,
+    required this.savedRegionId,
+    required this.travelPeriod,
+    required this.selectedSpots,
+  });
 
   @override
   State<RouteScreen> createState() => _RouteScreenState();
@@ -19,37 +31,68 @@ class _RouteScreenState extends State<RouteScreen> {
 
   // 🌟 네이버 지도 컨트롤러
   NaverMapController? _mapController;
+  int _selectedDay = 1;
+  RoutePlan? _routePlan;
+  bool _isLoading = true;
+  String? _errorMessage;
 
-  // 🌟 테스트 코스 데이터 (위도/경도 추가)
-  final List<Map<String, dynamic>> routeSpots = [
-    {
-      'name': '올디벗구디',
-      'type': '카페',
-      'time': '도보 8분',
-      'lat': 33.245,
-      'lng': 126.412
-    },
-    {
-      'name': '중문시장',
-      'type': '식당',
-      'time': '도보 15분',
-      'lat': 33.249,
-      'lng': 126.418
-    },
-    {
-      'name': '해양레저',
-      'type': '액티비티',
-      'time': '차량 10분',
-      'lat': 33.241,
-      'lng': 126.425
-    },
-    {'name': '숙소', 'type': '휴식', 'time': '', 'lat': 33.255, 'lng': 126.410},
-  ];
+  int get _dayCount => switch (widget.travelPeriod) {
+        '1박 2일' => 2,
+        '2박 3일' => 3,
+        _ => 1,
+      };
+
+  List<RouteSpot> get _currentSpots =>
+      _routePlan?.byDay[_selectedDay] ?? const <RouteSpot>[];
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _loadRoute();
+  }
+
+  Future<void> _loadRoute() async {
+    if (widget.selectedSpots.isEmpty) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = '경로에 추가할 스팟을 하나 이상 선택해주세요.';
+      });
+      return;
+    }
+
+    try {
+      final plan = await RouteService.optimize(
+        spots: widget.selectedSpots,
+        dayCount: _dayCount,
+        mobilityChoice: 'car',
+      );
+      await RouteService.save(
+        savedRegionId: widget.savedRegionId,
+        plan: plan,
+        mobilityChoice: 'car',
+      );
+      RoutePlan savedPlan = plan;
+      try {
+        final loadedPlan = await RouteService.getSaved(widget.savedRegionId);
+        if (loadedPlan.byDay.isNotEmpty) savedPlan = loadedPlan;
+      } catch (_) {
+        // Keep the freshly optimized plan if loading the saved copy fails.
+      }
+      debugPrint('[Route Screen] selected day: $_selectedDay, spots: '
+          '${savedPlan.byDay[_selectedDay]?.length ?? 0}');
+      if (!mounted) return;
+      setState(() {
+        _routePlan = savedPlan;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = error.toString().replaceFirst('Exception: ', '');
+      });
+    }
   }
 
   @override
@@ -79,16 +122,19 @@ class _RouteScreenState extends State<RouteScreen> {
 
     List<NLatLng> pathPoints = [];
 
-    for (int i = 0; i < routeSpots.length; i++) {
-      final spot = routeSpots[i];
-      final position = NLatLng(spot['lat'], spot['lng']);
+    for (int i = 0; i < _currentSpots.length; i++) {
+      final spot = _currentSpots[i];
+      final latitude = spot.latitude;
+      final longitude = spot.longitude;
+      if (latitude == null || longitude == null) continue;
+      final position = NLatLng(latitude, longitude);
       pathPoints.add(position);
 
       // 1. 마커(점) 찍기
       final marker = NMarker(
         id: 'marker_$i',
         position: position,
-        caption: NOverlayCaption(text: spot['name']),
+        caption: NOverlayCaption(text: spot.name),
       );
       _mapController!.addOverlay(marker);
     }
@@ -114,6 +160,19 @@ class _RouteScreenState extends State<RouteScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFFBF9F4),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_errorMessage != null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFFBF9F4),
+        appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
+        body: Center(child: Text(_errorMessage!, textAlign: TextAlign.center)),
+      );
+    }
     return Scaffold(
       backgroundColor: const Color(0xFFFBF9F4),
       appBar: AppBar(
@@ -133,6 +192,64 @@ class _RouteScreenState extends State<RouteScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            if (_dayCount > 1) _buildDayTabs(),
+            Expanded(child: _buildRouteContent()),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDayTabs() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFE7E2D8)),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            for (var day = 1; day <= _dayCount; day++) ...[
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _selectedDay = day),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: _selectedDay == day
+                          ? const Color(0xFF4A7C59)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: Text(
+                      '$day일차',
+                      style: TextStyle(
+                        color: _selectedDay == day
+                            ? Colors.white
+                            : const Color(0xFF777777),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (day < _dayCount) const SizedBox(width: 4),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRouteContent() {
+    return Column(
+      children: [
             // ==========================================
             // 1. 상단: 진짜 네이버 지도 영역 (Flex: 5)
             // ==========================================
@@ -153,6 +270,7 @@ class _RouteScreenState extends State<RouteScreen> {
                 ),
                 // 🌟 더미 텍스트를 지우고 NaverMap 위젯 삽입!
                 child: NaverMap(
+                  key: ValueKey(_selectedDay),
                   options: const NaverMapViewOptions(
                     mapType: NMapType.basic,
                     logoClickEnable: false, // 네이버 로고 클릭 방지
@@ -188,12 +306,12 @@ class _RouteScreenState extends State<RouteScreen> {
                     child: ListView.builder(
                       controller: _scrollController,
                       scrollDirection: Axis.horizontal,
-                      itemCount: routeSpots.length + 2,
+                      itemCount: _currentSpots.length + 2,
                       itemBuilder: (context, index) {
-                        if (index == 0 || index == routeSpots.length + 1)
+                        if (index == 0 || index == _currentSpots.length + 1)
                           return const SizedBox(width: 100);
-                        return _buildSpotItem(routeSpots[index - 1],
-                            isLast: (index == routeSpots.length));
+                        return _buildSpotItem(_currentSpots[index - 1],
+                            isLast: (index == _currentSpots.length));
                       },
                     ),
                   ),
@@ -213,13 +331,11 @@ class _RouteScreenState extends State<RouteScreen> {
               ),
             ),
           ],
-        ),
-      ),
     );
   }
 
   // 하단 아이템 렌더링 (기존 동일)[cite: 4]
-  Widget _buildSpotItem(Map<String, dynamic> spot, {required bool isLast}) {
+  Widget _buildSpotItem(RouteSpot spot, {required bool isLast}) {
     return SizedBox(
       width: 180,
       child: Stack(
@@ -229,7 +345,7 @@ class _RouteScreenState extends State<RouteScreen> {
             Positioned(
               bottom: 72,
               right: -30,
-              child: Text(spot['time'],
+              child: Text(_travelTime(spot),
                   style: const TextStyle(
                       fontSize: 14,
                       color: Colors.black87,
@@ -255,7 +371,7 @@ class _RouteScreenState extends State<RouteScreen> {
                     child: Center(
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
-                        child: Text(spot['name'],
+                        child: Text(spot.name,
                             textAlign: TextAlign.center,
                             maxLines: 2,
                             style: const TextStyle(
@@ -273,5 +389,16 @@ class _RouteScreenState extends State<RouteScreen> {
         ],
       ),
     );
+  }
+
+  String _travelTime(RouteSpot spot) {
+    final minutes = spot.durationFromPreviousMinutes;
+    if (minutes == null) return '';
+    final mode = switch (spot.mobilityChoice) {
+      'walk_transit' => '도보',
+      'car' => '자차',
+      _ => '이동',
+    };
+    return '$mode $minutes분';
   }
 }
