@@ -219,8 +219,17 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
     try {
       _savedPreferenceId =
           await PreferenceService.save(_buildPreferencePayload());
-    } catch (_) {
+    } catch (error) {
       _savedPreferenceId = null;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error.toString().replaceFirst('Exception: ', ''),
+            ),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

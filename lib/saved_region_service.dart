@@ -211,3 +211,57 @@ class SavedRegionService {
         .toList(growable: false);
   }
 }
+
+class Stamp {
+  final int savedRegionId;
+  final String regionName;
+  final String assetKey;
+
+  const Stamp({
+    required this.savedRegionId,
+    required this.regionName,
+    required this.assetKey,
+  });
+
+  factory Stamp.fromJson(Map<String, dynamic> json) {
+    final savedRegionId = json['saved_region_id'];
+    final regionName = json['region_name'];
+    final assetKey = json['stamp_asset_key'];
+    if (savedRegionId is! int ||
+        regionName is! String ||
+        assetKey is! String ||
+        regionName.trim().isEmpty ||
+        assetKey.trim().isEmpty) {
+      throw const FormatException('도장 응답 형식이 올바르지 않습니다.');
+    }
+    return Stamp(
+      savedRegionId: savedRegionId,
+      regionName: regionName.trim(),
+      assetKey: assetKey.trim(),
+    );
+  }
+}
+
+extension StampService on SavedRegionService {
+  static Future<List<Stamp>> getStamps() async {
+    final jwt = await AuthService.getJwt();
+    if (jwt == null || jwt.isEmpty) throw Exception('로그인이 필요합니다.');
+
+    final response = await http.get(
+      Uri.parse('https://soomtrip-api.cspc.me/stamps'),
+      headers: {'Authorization': 'Bearer $jwt'},
+    ).timeout(const Duration(seconds: 15));
+
+    debugPrint('[Stamp API] GET status: ${response.statusCode}');
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('도장 불러오기 실패 (${response.statusCode})');
+    }
+
+    final body = jsonDecode(utf8.decode(response.bodyBytes));
+    if (body is! List) throw const FormatException('도장 응답 형식이 올바르지 않습니다.');
+    return body
+        .whereType<Map<String, dynamic>>()
+        .map(Stamp.fromJson)
+        .toList(growable: false);
+  }
+}

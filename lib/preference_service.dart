@@ -33,7 +33,8 @@ class PreferenceService {
     debugPrint('[Preference API] Response: ${response.body}');
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('취향 저장 실패 (${response.statusCode})');
+      throw Exception(
+          '취향 저장 실패 (${response.statusCode}): ${_errorMessage(response)}');
     }
 
     final body = jsonDecode(response.body);
@@ -47,5 +48,17 @@ class PreferenceService {
     }
 
     return preferenceId;
+  }
+
+  static String _errorMessage(http.Response response) {
+    try {
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (body is Map<String, dynamic> && body['detail'] != null) {
+        return body['detail'].toString();
+      }
+    } catch (_) {
+      // Fall back to the status code when the server response is not JSON.
+    }
+    return '서버 응답을 확인해 주세요.';
   }
 }

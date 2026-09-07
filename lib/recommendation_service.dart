@@ -29,13 +29,17 @@ class RecommendationService {
           },
           body: requestBody,
         )
-        .timeout(const Duration(seconds: 15));
+        .timeout(
+          const Duration(seconds: 60),
+          onTimeout: () => throw Exception('여행지 추천 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.'),
+        );
 
     debugPrint('[Recommendation API] Status: ${response.statusCode}');
     debugPrint('[Recommendation API] Response: ${response.body}');
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('여행지 추천 실패 (${response.statusCode})');
+      throw Exception(
+          '여행지 추천 실패 (${response.statusCode}): ${_errorMessage(response)}');
     }
 
     final body = jsonDecode(response.body);
@@ -59,5 +63,17 @@ class RecommendationService {
     }
 
     return firstCandidate;
+  }
+
+  static String _errorMessage(http.Response response) {
+    try {
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (body is Map<String, dynamic> && body['detail'] != null) {
+        return body['detail'].toString();
+      }
+    } catch (_) {
+      // Fall back to the status code when the server response is not JSON.
+    }
+    return '서버 응답을 확인해 주세요.';
   }
 }

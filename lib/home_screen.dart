@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 
 import 'diary_entry_service.dart';
@@ -55,23 +53,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadStamps() async {
     try {
-      final regions = await SavedRegionService.getAll();
-      final entries = await Future.wait(
-        regions.map((region) => DiaryEntryService.getBySavedRegion(region.id)),
-      );
+      final stamps = await StampService.getStamps();
       if (!mounted) return;
-      final random = Random();
       setState(() {
         myStamps
           ..clear()
           ..addAll([
-            for (var index = 0; index < regions.length; index++)
-              if (entries[index] != null)
-                StampData(
-                  name: regions[index].regionName,
-                  assetPath:
-                      'assets/images/stamp${random.nextInt(6) + 1}.png',
-                ),
+            for (final stamp in stamps)
+              StampData(
+                name: stamp.regionName,
+                assetPath: _assetPathFor(stamp.assetKey),
+              ),
           ]);
         _errorMessage = null;
         _isLoading = false;
@@ -83,6 +75,17 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  String _assetPathFor(String assetKey) {
+    final normalizedKey = assetKey.startsWith('stamp')
+        ? assetKey
+        : 'stamp$assetKey';
+    final stampNumber = int.tryParse(normalizedKey.replaceFirst('stamp', ''));
+    if (stampNumber == null || stampNumber < 1 || stampNumber > 6) {
+      return 'assets/images/stamp1.png';
+    }
+    return 'assets/images/$normalizedKey.png';
   }
 
   @override

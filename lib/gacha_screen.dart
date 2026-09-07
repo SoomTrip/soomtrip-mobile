@@ -118,13 +118,15 @@ class _GachaScreenState extends State<GachaScreen>
         // 각 안내 문구를 최소 2초씩 보여 준다.
         Future<void>.delayed(const Duration(seconds: 6)),
       ]);
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       _statusTimer?.cancel();
       _shakeController.stop();
       setState(() => _isSpinning = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('여행지를 추천받지 못했습니다. 다시 시도해 주세요.')),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            error.toString().replaceFirst('Exception: ', '')),
+      ),
       );
       return;
     }
