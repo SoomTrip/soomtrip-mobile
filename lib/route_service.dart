@@ -100,10 +100,14 @@ class RoutePlan {
           }
           final spotJson = Map<String, dynamic>.of(rawSpot);
           spotJson['mobility_choice'] ??= mobilityChoice;
-          // Segment i describes the trip from spots[i] to spots[i + 1].
-          // Map before any filtering so the route's indices stay aligned.
-          if (index > 0 && index - 1 < segments.length) {
-            final segment = segments[index - 1];
+          // The first spot has no incoming trip. segments[1] is spots[0]
+          // -> spots[1], segments[2] is spots[1] -> spots[2], and so on.
+          if (index == 0) {
+            spotJson['distance_from_prev_km'] = null;
+            spotJson['duration_from_prev_minutes'] = null;
+          }
+          if (index > 0 && index < segments.length) {
+            final segment = segments[index];
             if (segment is Map) {
               // New responses own these fields, including explicit nulls
               // when routing fails. Only backfill older response formats.

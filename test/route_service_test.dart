@@ -29,6 +29,7 @@ void main() {
             },
           ],
           'segments': [
+            null, // Index 0 has no incoming trip.
             {'distance_km': 99, 'duration_minutes': 99},
             {'distance_km': 99, 'duration_minutes': 99},
           ],
@@ -80,6 +81,7 @@ void main() {
         'day1': {
           'spots': [spot('A'), spot('B'), spot('C')],
           'segments': [
+            null, // Index 0 has no incoming trip.
             {'distance_km': 1.2, 'duration_minutes': 4},
             {'distance_km': '3.5', 'duration_minutes': '12'},
           ],
@@ -87,6 +89,7 @@ void main() {
         'day2': {
           'spots': [spot('D'), spot('E')],
           'segments': [
+            null, // Index 0 has no incoming trip.
             {'distance_km': 0.0, 'duration_minutes': 0}
           ],
         },
@@ -136,6 +139,7 @@ void main() {
         'day1': {
           'spots': [spot('A'), spot('B'), spot('A')],
           'segments': [
+            null, // Index 0 has no incoming trip.
             {'duration_minutes': 10},
             {'duration_minutes': 15},
           ],
