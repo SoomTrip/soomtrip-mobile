@@ -40,9 +40,8 @@ class RouteSpot {
 
     return RouteSpot(
       savedRegionSpotId: integer(json['saved_region_spot_id']),
-      contentId: json['content_id'] is String
-          ? json['content_id'] as String
-          : null,
+      contentId:
+          json['content_id'] is String ? json['content_id'] as String : null,
       name: json['name'] is String ? json['name'] as String : '여행지',
       categoryLabel: json['category_label'] is String
           ? json['category_label'] as String
@@ -51,7 +50,7 @@ class RouteSpot {
       longitude: number(json['longitude']),
       distanceFromPreviousKm: number(json['distance_from_prev_km']),
       durationFromPreviousMinutes: integer(json['duration_from_prev_minutes']),
-        mobilityChoice: json['mobility_choice'] is String
+      mobilityChoice: json['mobility_choice'] is String
           ? json['mobility_choice'] as String
           : null,
     );
@@ -75,7 +74,8 @@ class RoutePlan {
 
   const RoutePlan(this.byDay);
 
-  factory RoutePlan.fromJson(Map<String, dynamic> json) {
+  factory RoutePlan.fromJson(Map<String, dynamic> json,
+      {String? mobilityChoice}) {
     final rawDays = json['route_by_day'];
     final days = <int, List<RouteSpot>>{};
     if (rawDays is Map) {
@@ -89,17 +89,40 @@ class RoutePlan {
                 ? value['spots']
                 : null;
         if (rawSpots is! List) return;
-        final parsedSpots = rawSpots
-            .whereType<Map<String, dynamic>>()
-            .map(RouteSpot.fromJson)
-            .toList(growable: false);
-        final seen = <String>{};
-        days[day] = parsedSpots.where((spot) {
-          final key = spot.savedRegionSpotId?.toString() ??
-              spot.contentId ??
-              '${spot.name}:${spot.latitude}:${spot.longitude}';
-          return seen.add(key);
-        }).toList(growable: false);
+        final segments = value is Map && value['segments'] is List
+            ? value['segments'] as List
+            : const [];
+        final parsedSpots = <RouteSpot>[];
+        for (var index = 0; index < rawSpots.length; index++) {
+          final rawSpot = rawSpots[index];
+          if (rawSpot is! Map<String, dynamic>) {
+            throw const FormatException('여행 경로의 장소 형식이 올바르지 않습니다.');
+          }
+          final spotJson = Map<String, dynamic>.of(rawSpot);
+          spotJson['mobility_choice'] ??= mobilityChoice;
+          // Segment i describes the trip from spots[i] to spots[i + 1].
+          // Map before any filtering so the route's indices stay aligned.
+          if (index > 0 && index - 1 < segments.length) {
+            final segment = segments[index - 1];
+            if (segment is Map) {
+              // New responses own these fields, including explicit nulls
+              // when routing fails. Only backfill older response formats.
+              if (!spotJson.containsKey('distance_from_prev_km')) {
+                spotJson['distance_from_prev_km'] =
+                    segment['distance_km'] ?? segment['distance_from_prev_km'];
+              }
+              if (!spotJson.containsKey('duration_from_prev_minutes')) {
+                spotJson['duration_from_prev_minutes'] =
+                    segment['duration_minutes'] ??
+                        segment['duration_from_prev_minutes'];
+              }
+              spotJson['mobility_choice'] =
+                  segment['mobility_choice'] ?? spotJson['mobility_choice'];
+            }
+          }
+          parsedSpots.add(RouteSpot.fromJson(spotJson));
+        }
+        days[day] = parsedSpots;
       });
     }
     debugPrint('[Route API] parsed route days: ${days.map(
@@ -107,10 +130,67 @@ class RoutePlan {
     )}');
     return RoutePlan(days);
   }
+
+  List<Map<String, dynamic>> toSaveEntries() {
+    final entries = <Map<String, dynamic>>[];
+    byDay.forEach((day, spots) {
+      for (var index = 0; index < spots.length; index++) {
+        final spotId = spots[index].savedRegionSpotId;
+        if (spotId == null) {
+          throw const FormatException('저장할 경로의 장소 ID가 없습니다.');
+        }
+        entries.add({
+          'saved_region_spot_id': spotId,
+          'visit_day': day,
+          'visit_order': index + 1,
+          'distance_from_prev_km': spots[index].distanceFromPreviousKm,
+          'duration_from_prev_minutes':
+              spots[index].durationFromPreviousMinutes,
+        });
+      }
+    });
+    return entries;
+  }
 }
 
 class RouteService {
   static const _baseUrl = 'https://soomtrip-api.cspc.me';
+
+  static void _logTravelValues(String stage, RoutePlan plan) {
+    if (!kDebugMode) return;
+    plan.byDay.forEach((day, spots) {
+      for (var index = 0; index < spots.length; index++) {
+        final spot = spots[index];
+        debugPrint('[Route Time][$stage] day$day #${index + 1} '
+            'content=${spot.contentId} savedId=${spot.savedRegionSpotId} '
+            'km=${spot.distanceFromPreviousKm} '
+            'min=${spot.durationFromPreviousMinutes}');
+      }
+    });
+  }
+
+  static void _logOptimizeFields(Map<String, dynamic> body) {
+    if (!kDebugMode) return;
+    final days = body['route_by_day'];
+    if (days is! Map) return;
+    days.forEach((day, value) {
+      if (value is! Map || value['spots'] is! List) return;
+      final spots = value['spots'] as List;
+      final segments = value['segments'];
+      debugPrint('[Route Time][response] $day spots=${spots.length} '
+          'segments=${segments is List ? segments.length : 0}');
+      for (var index = 0; index < spots.length; index++) {
+        final spot = spots[index];
+        if (spot is! Map) continue;
+        final km = spot.containsKey('distance_from_prev_km')
+            ? spot['distance_from_prev_km'] : 'missing';
+        final minutes = spot.containsKey('duration_from_prev_minutes')
+            ? spot['duration_from_prev_minutes'] : 'missing';
+        debugPrint('[Route Time][response] $day #${index + 1} '
+            'content=${spot['content_id']} km=$km min=$minutes');
+      }
+    });
+  }
 
   static Future<String> _jwt() async {
     final jwt = await AuthService.getJwt();
@@ -164,7 +244,8 @@ class RouteService {
     if (body is! Map<String, dynamic>) {
       throw const FormatException('여행 경로 응답 형식이 올바르지 않습니다.');
     }
-    final plan = RoutePlan.fromJson(body);
+    _logOptimizeFields(body);
+    final plan = RoutePlan.fromJson(body, mobilityChoice: mobilityChoice);
     final idsByContentId = <String, int>{
       for (final spot in uniqueSpots)
         if (spot.id != null && spot.contentId.isNotEmpty)
@@ -173,10 +254,12 @@ class RouteService {
     final mappedDays = <int, List<RouteSpot>>{};
     plan.byDay.forEach((day, daySpots) {
       mappedDays[day] = daySpots
-          .map((spot) => spot.savedRegionSpotId == null && spot.contentId != null
+          .map((spot) => spot.savedRegionSpotId == null &&
+                  spot.contentId != null
               ? (idsByContentId[spot.contentId!] == null
                   ? spot
-                  : spot.withSavedRegionSpotId(idsByContentId[spot.contentId!]!))
+                  : spot
+                      .withSavedRegionSpotId(idsByContentId[spot.contentId!]!))
               : spot)
           .toList(growable: false);
     });
@@ -189,20 +272,8 @@ class RouteService {
     required String mobilityChoice,
   }) async {
     final jwt = await _jwt();
-    final entries = <Map<String, dynamic>>[];
-    plan.byDay.forEach((day, spots) {
-      for (var index = 0; index < spots.length; index++) {
-        final spotId = spots[index].savedRegionSpotId;
-        if (spotId == null) continue;
-        entries.add({
-          'saved_region_spot_id': spotId,
-          'visit_day': day,
-          'visit_order': index + 1,
-          'distance_from_prev_km': spots[index].distanceFromPreviousKm,
-          'duration_from_prev_minutes': spots[index].durationFromPreviousMinutes,
-        });
-      }
-    });
+    final entries = plan.toSaveEntries();
+    _logTravelValues('save-request', plan);
     final response = await http
         .post(
           Uri.parse('$_baseUrl/route/save'),
@@ -237,6 +308,8 @@ class RouteService {
     if (body is! Map<String, dynamic>) {
       throw const FormatException('저장된 경로 응답 형식이 올바르지 않습니다.');
     }
-    return RoutePlan.fromJson(body);
+    final plan = RoutePlan.fromJson(body);
+    _logTravelValues('get-response', plan);
+    return plan;
   }
 }

@@ -202,14 +202,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
         Text('친구 코드를 입력해\n새 친구를 추가해 보세요 🌱',
             style: TextStyle(color: Colors.grey, height: 1.4)),
       ]),
-      Container(
+      Image.asset(
+        'assets/images/character_friends.png',
         width: 110,
         height: 90,
-        decoration: BoxDecoration(
-            color: const Color(0xFFEEF3EA),
-            borderRadius: BorderRadius.circular(16)),
-        child: const Icon(Icons.people_alt_rounded,
-            color: Color(0xFF4A7C59), size: 48),
+        fit: BoxFit.contain,
       ),
     ]);
   }

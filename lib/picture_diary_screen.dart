@@ -112,8 +112,33 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
         _ => 'sunny',
       };
 
+  bool get _hasRequiredContent {
+    final hasText = _messageController.text.trim().isNotEmpty;
+    return hasText && _hasDrawing;
+  }
+
+  bool get _hasDrawing => _drawingController.getHistory.any(
+        (content) => content is! Eraser,
+      );
+
+  bool get _hasAnyContent =>
+      _messageController.text.trim().isNotEmpty || _hasDrawing;
+
   Future<void> _saveAndPop() async {
     if (_isSaving || _isLoading) return;
+    if (_entry == null && !_hasAnyContent) {
+      setState(() => _allowPop = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.pop(context);
+      });
+      return;
+    }
+    if (_entry == null && !_hasRequiredContent) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('글을 한 글자 이상 쓰고 그림을 그려주세요.')),
+      );
+      return;
+    }
     FocusScope.of(context).unfocus();
     setState(() => _isSaving = true);
     try {
@@ -236,6 +261,21 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
               ),
               border: InputBorder.none,
               isDense: true,
+            ),
+          ),
+          bottom: const PreferredSize(
+            preferredSize: Size.fromHeight(24),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 6),
+              child: Text(
+                '그림일기를 작성하고 뒤로가기를 누르면 자동으로 저장돼요!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF888888),
+                  fontFamily: 'CustomFont',
+                ),
+              ),
             ),
           ),
         ),

@@ -45,6 +45,7 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
 
   // 🌟 진행 상태 및 저장 관련 변수
   bool _isCompleted = false; // 테스트 완료 여부
+  bool _showBackgroundEffect = true;
   bool _isSaving = false;
   int? _savedPreferenceId;
 
@@ -268,6 +269,7 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
       finalUserSelection.clear();
       _sliderValue = 50.0;
       _isCompleted = false;
+      _showBackgroundEffect = true;
       _savedPreferenceId = null;
     });
   }
@@ -313,6 +315,14 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
                               child: Image.asset("assets/images/sketchbook.png",
                                   fit: BoxFit.fill),
                             ),
+                            if (_isCompleted && _showBackgroundEffect)
+                              Positioned.fill(
+                                child: Image.asset(
+                                  'assets/images/effect.png',
+                                  fit: BoxFit.fill,
+                                  excludeFromSemantics: true,
+                                ),
+                              ),
                             const Align(
                               alignment: Alignment.topCenter,
                               child: Padding(
@@ -358,7 +368,7 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
                                 top: 90,
                                 child: _buildStickerOnly(
                                   assetPath: selectedStickers[4]!,
-                                  width: 185,
+                                  width: 175,
                                   height: 150,
                                   rotation: 0.14,
                                   fit: BoxFit.fill,
@@ -372,7 +382,7 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
                                 child: Center(
                                   child: _buildStickerOnly(
                                     assetPath: selectedStickers[2]!,
-                                    width: 430,
+                                    width: 440,
                                     height: 225,
                                     rotation: 0.0,
                                   ),
@@ -411,6 +421,29 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
                 ),
               ),
             ),
+
+            if (_isCompleted)
+              TextButton.icon(
+                onPressed: () => setState(
+                  () => _showBackgroundEffect = !_showBackgroundEffect,
+                ),
+                icon: Icon(
+                  _showBackgroundEffect
+                      ? Icons.toggle_on_rounded
+                      : Icons.toggle_off_rounded,
+                  size: 22,
+                ),
+                label: Text('배경 효과 ${_showBackgroundEffect ? "ON" : "OFF"}'),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF4A7C59),
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontFamily: 'CustomFont',
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
 
             Padding(
               padding: const EdgeInsets.only(top: 8, bottom: 4),

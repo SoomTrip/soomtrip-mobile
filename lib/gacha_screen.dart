@@ -44,6 +44,13 @@ class _GachaScreenState extends State<GachaScreen>
   String? _recommendedDestination;
   Map<String, dynamic>? _recommendedCandidate;
 
+  String get _recommendedReview {
+    final review = _recommendedCandidate?['one_line_review'];
+    return review is String && review.trim().isNotEmpty
+        ? review.trim()
+        : '당신의 취향에 꼭 맞는 특별한 여행지예요.';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -284,17 +291,31 @@ class _GachaScreenState extends State<GachaScreen>
           ),
 
           if (_isSpinning && !_isDropped && !_showZoomedCapsule)
-            Positioned(
-              left: 24,
-              right: 24,
-              bottom: 24,
-              child: Text(
-                _statusMessages[_statusIndex],
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF3F5948),
+            Center(
+              child: SizedBox(
+                width: 350,
+                height: 500,
+                child: LayoutBuilder(
+                  builder: (context, constraints) => Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned(
+                        // Machine top + rendered image height + a small gap.
+                        top: 50 + constraints.maxWidth * 1448 / 1086 + 6,
+                        left: 0,
+                        right: 0,
+                        child: Text(
+                          _statusMessages[_statusIndex],
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF3F5948),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -374,7 +395,7 @@ class _GachaScreenState extends State<GachaScreen>
                                     ? _buildTicket(
                                         destination:
                                             _recommendedDestination ?? '',
-                                        memo: '당신의 취향에 꼭 맞는 특별한 여행지예요.',
+                                        memo: _recommendedReview,
                                       )
                                     : const SizedBox(height: 250),
                               ),
@@ -442,6 +463,22 @@ class _GachaScreenState extends State<GachaScreen>
                 ),
               ),
             ),
+          Positioned(
+            left: 24,
+            right: 24,
+            bottom: 12,
+            child: SafeArea(
+              top: false,
+              child: Text(
+                '출처: ⓒ한국관광공사',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: _showZoomedCapsule ? Colors.white70 : Colors.black54,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -497,7 +534,7 @@ class _GachaScreenState extends State<GachaScreen>
               child: SizedBox(
                 width: 140, // 글자가 밖으로 튀어나가지 않게 제한
                 child: AnimatedTextKit(
-                  key: ValueKey('ai-comment-$destination'),
+                  key: ValueKey((destination, memo)),
                   isRepeatingAnimation: false,
                   displayFullTextOnTap: true,
                   animatedTexts: [

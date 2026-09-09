@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'route_screen.dart';
 import 'saved_region_service.dart';
@@ -395,6 +396,24 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
     );
   }
 
+  Future<void> _openNaverMap(SavedSpot spot) async {
+    final query = '${widget.destination.regionName} ${spot.name}';
+    final uri = Uri(
+      scheme: 'https',
+      host: 'map.naver.com',
+      pathSegments: ['p', 'search', query],
+    );
+    try {
+      if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+    } catch (_) {
+      // Show the same retry guidance when the platform cannot open the link.
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('네이버 지도를 열지 못했어요. 잠시 후 다시 시도해주세요.')),
+    );
+  }
+
   Future<void> _showSpotMap(SavedSpot spot) async {
     final latitude = spot.latitude;
     final longitude = spot.longitude;
@@ -434,6 +453,33 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
                 ),
         ),
         actions: [
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () => _openNaverMap(spot),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF4A7C59),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.open_in_new_rounded, size: 16),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      spot.name,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                  // Balance the leading icon so the text itself is centered.
+                  const SizedBox(width: 24),
+                ],
+              ),
+            ),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('닫기'),

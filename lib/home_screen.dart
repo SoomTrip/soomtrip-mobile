@@ -29,12 +29,12 @@ class _HomeScreenState extends State<HomeScreen> {
     String? _errorMessage;
 
   // 🌟 위쪽 두 줄에 2개씩, 마지막 도장은 3행 중앙에 배치
-  final List<Map<String, double>> pageSlots = [
-    {'dx': 0.12, 'dy': 0.15, 'angle': -0.05}, // 1행 1열
-    {'dx': 0.55, 'dy': 0.18, 'angle': 0.04}, // 1행 2열
-    {'dx': 0.15, 'dy': 0.45, 'angle': 0.06}, // 2행 1열
-    {'dx': 0.52, 'dy': 0.42, 'angle': -0.03}, // 2행 2열
-    {'dx': 0.50, 'dy': 0.70, 'angle': -0.02}, // 3행 중앙
+  List<Map<String, double>> get pageSlots => [
+    {'dx': 0.15, 'dy': 0.12, 'angle': -0.05}, // 1행 1열
+    {'dx': 0.53, 'dy': 0.18, 'angle': 0.07}, // 1행 2열
+    {'dx': 0.11, 'dy': 0.40, 'angle': 0.06}, // 2행 1열
+    {'dx': 0.48, 'dy': 0.44, 'angle': -0.03}, // 2행 2열
+    {'dx': 0.27, 'dy': 0.66, 'angle': -0.08}, // 3행 중앙
   ];
 
   @override
@@ -168,9 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 var slot = pageSlots[slotIndex];
 
                                 return Positioned(
-                                  left: slotIndex == _stampsPerPage - 1
-                                      ? (constraints.maxWidth - _stampSize) / 2
-                                      : constraints.maxWidth * slot['dx']!,
+                                  left: constraints.maxWidth * slot['dx']!,
                                   top: constraints.maxHeight * slot['dy']!,
                                   child: Transform.rotate(
                                     angle: slot['angle']!,
@@ -288,7 +286,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Positioned(
             left: 23,
             right: 23,
-            bottom: 35,
+            bottom: 41,
             child: FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(

@@ -96,7 +96,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
 
       setState(() {
         final nickname = kakaoProfile?.nickname?.trim();
-        if (nickname != null && nickname.isNotEmpty) {
+        if (_nickname == null && nickname != null && nickname.isNotEmpty) {
           _nickname = nickname;
         }
 
@@ -110,135 +110,228 @@ class _MyPageScreenState extends State<MyPageScreen> {
     }
   }
 
-  Future<void> _showProfileImagePicker() async {
+  Future<void> _showProfileEditor() async {
+    final nicknameController = TextEditingController(text: _nickname ?? '');
+    final formKey = GlobalKey<FormState>();
+    var draftAsset = _selectedProfileAsset;
+    var draftBytes = _selectedProfileBytes;
+    var saving = false;
+    var picking = false;
+    String? errorMessage;
+
     await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
       backgroundColor: const Color(0xFFFBF9F4),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '프로필 사진 선택',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, updateSheet) => PopScope(
+          canPop: !saving && !picking,
+          child: SafeArea(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                20,
+                20,
+                20 + MediaQuery.viewInsetsOf(context).bottom,
               ),
-              const SizedBox(height: 6),
-              const Text(
-                '기본 이미지를 고르거나 + 버튼으로 사진을 추가해 보세요.',
-                style: TextStyle(color: Colors.black54),
-              ),
-              const SizedBox(height: 20),
-              Wrap(
-                spacing: 14,
-                runSpacing: 14,
-                children: [
-                  for (final asset in _defaultProfileAssets)
-                    _buildProfileOption(
-                      image: AssetImage(asset),
-                      isSelected: _selectedProfileAsset == asset,
-                      onTap: () async {
-                        Navigator.pop(sheetContext);
-                        await _selectDefaultProfile(asset);
-                      },
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('프로필 수정',
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    Center(
+                      child: CircleAvatar(
+                        radius: 38,
+                        backgroundImage: draftBytes != null
+                            ? MemoryImage(draftBytes!)
+                            : draftAsset != null
+                                ? AssetImage(draftAsset!)
+                                : _profileImageUrl != null
+                                    ? NetworkImage(_profileImageUrl!)
+                                    : null,
+                        child: draftBytes == null &&
+                                draftAsset == null &&
+                                _profileImageUrl == null
+                            ? const Icon(Icons.person, size: 38)
+                            : null,
+                      ),
                     ),
-                  _buildGalleryOption(sheetContext),
-                ],
+                    const SizedBox(height: 12),
+                    const Text('프로필 사진',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final asset in _defaultProfileAssets)
+                          InkWell(
+                            onTap: saving || picking
+                                ? null
+                                : () => updateSheet(() {
+                                      draftAsset = asset;
+                                      draftBytes = null;
+                                    }),
+                            borderRadius: BorderRadius.circular(32),
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: draftAsset == asset
+                                      ? const Color(0xFF4A7C59)
+                                      : Colors.transparent,
+                                  width: 2,
+                                ),
+                              ),
+                              child: CircleAvatar(
+                                  radius: 25,
+                                  backgroundImage: AssetImage(asset)),
+                            ),
+                          ),
+                        IconButton(
+                          tooltip: '갤러리에서 사진 선택',
+                          icon: const Icon(Icons.add_photo_alternate_outlined),
+                          onPressed: saving || picking
+                              ? null
+                              : () async {
+                                  updateSheet(() {
+                                    picking = true;
+                                    errorMessage = null;
+                                  });
+                                  try {
+                                    final image = await ImagePicker().pickImage(
+                                      source: ImageSource.gallery,
+                                      maxWidth: 600,
+                                      imageQuality: 80,
+                                    );
+                                    if (image != null) {
+                                      final bytes = await image.readAsBytes();
+                                      if (!sheetContext.mounted) return;
+                                      updateSheet(() {
+                                        draftBytes = bytes;
+                                        draftAsset = null;
+                                      });
+                                    }
+                                  } catch (_) {
+                                    if (sheetContext.mounted) {
+                                      updateSheet(() => errorMessage =
+                                          '사진을 불러오지 못했어요. 다시 시도해 주세요.');
+                                    }
+                                  } finally {
+                                    if (sheetContext.mounted) {
+                                      updateSheet(() => picking = false);
+                                    }
+                                  }
+                                },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: nicknameController,
+                      enabled: !saving,
+                      decoration: const InputDecoration(labelText: '닉네임'),
+                      textInputAction: TextInputAction.done,
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                              ? '닉네임을 입력해주세요.'
+                              : null,
+                    ),
+                    if (errorMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Text(errorMessage!,
+                            style: const TextStyle(color: Colors.red)),
+                      ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: saving || picking
+                              ? null
+                              : () => Navigator.pop(sheetContext),
+                          child: const Text('취소'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF4A7C59),
+                            foregroundColor: Colors.white,
+                          ),
+                          onPressed: saving || picking
+                              ? null
+                              : () async {
+                                  if (!formKey.currentState!.validate()) return;
+                                  updateSheet(() {
+                                    saving = true;
+                                    errorMessage = null;
+                                  });
+                                  try {
+                                    final nickname =
+                                        nicknameController.text.trim();
+                                    if (nickname != _nickname) {
+                                      await AuthService.updateNickname(nickname);
+                                    }
+                                    final preferences =
+                                        await SharedPreferences.getInstance();
+                                    if (draftBytes != null) {
+                                      await preferences.setString(
+                                          _profileBytesKey,
+                                          base64Encode(draftBytes!));
+                                      await preferences
+                                          .remove(_profileAssetKey);
+                                    } else if (draftAsset != null) {
+                                      await preferences.setString(
+                                          _profileAssetKey, draftAsset!);
+                                      await preferences
+                                          .remove(_profileBytesKey);
+                                    }
+                                    if (!mounted || !sheetContext.mounted) {
+                                      return;
+                                    }
+                                    setState(() {
+                                      _nickname = nickname;
+                                      _selectedProfileAsset = draftAsset;
+                                      _selectedProfileBytes = draftBytes;
+                                    });
+                                    Navigator.pop(sheetContext);
+                                  } catch (_) {
+                                    if (sheetContext.mounted) {
+                                      updateSheet(() {
+                                        saving = false;
+                                        errorMessage =
+                                            '프로필을 저장하지 못했어요. 다시 시도해 주세요.';
+                                      });
+                                    }
+                                  }
+                                },
+                          child: Text(saving ? '저장 중...' : '저장'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
-  }
-
-  Widget _buildProfileOption({
-    required ImageProvider image,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 68,
-        height: 68,
-        padding: const EdgeInsets.all(3),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: isSelected ? const Color(0xFF4A7C59) : Colors.transparent,
-            width: 3,
-          ),
-        ),
-        child: CircleAvatar(backgroundImage: image),
-      ),
-    );
-  }
-
-  Widget _buildGalleryOption(BuildContext sheetContext) {
-    return GestureDetector(
-      onTap: () async {
-        Navigator.pop(sheetContext);
-        await _pickProfileFromGallery();
-      },
-      child: Container(
-        width: 68,
-        height: 68,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.white,
-          border: Border.all(color: const Color(0xFFD9E4D6), width: 2),
-        ),
-        child:
-            const Icon(Icons.add_rounded, size: 34, color: Color(0xFF4A7C59)),
-      ),
-    );
-  }
-
-  Future<void> _selectDefaultProfile(String asset) async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_profileAssetKey, asset);
-    await preferences.remove(_profileBytesKey);
-    if (!mounted) return;
-    setState(() {
-      _selectedProfileAsset = asset;
-      _selectedProfileBytes = null;
-    });
-  }
-
-  Future<void> _pickProfileFromGallery() async {
-    try {
-      final image = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 600,
-        imageQuality: 80,
-      );
-      if (image == null) return;
-
-      final imageBytes = await image.readAsBytes();
-      final preferences = await SharedPreferences.getInstance();
-      await preferences.setString(
-        _profileBytesKey,
-        base64Encode(imageBytes),
-      );
-      await preferences.remove(_profileAssetKey);
-      if (!mounted) return;
-      setState(() {
-        _selectedProfileBytes = imageBytes;
-        _selectedProfileAsset = null;
-      });
-    } catch (error) {
-      debugPrint('[My Page] Failed to pick profile image: $error');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('사진을 불러오지 못했어요. 다시 시도해 주세요.')),
-      );
-    }
+    // Wait until the sheet's closing animation releases its text field.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    nicknameController.dispose();
   }
 
   Future<void> _showLogoutDialog() async {
@@ -361,9 +454,9 @@ class _MyPageScreenState extends State<MyPageScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
+        const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
+          children: [
             Text(
               "마이페이지",
               style: TextStyle(
@@ -378,17 +471,11 @@ class _MyPageScreenState extends State<MyPageScreen> {
             ),
           ],
         ),
-        // 🌟 나중에 여기에 잎사귀 캐릭터 이미지를 넣으세요!
-        // Image.asset('assets/images/character.png', width: 100),
-        Container(
+        Image.asset(
+          'assets/images/character.png',
           width: 100,
           height: 100,
-          decoration: BoxDecoration(
-            color: const Color(0xFFE8F5E9),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Icon(Icons.park_rounded,
-              color: Color(0xFF4A7C59), size: 50),
+          fit: BoxFit.contain,
         ),
       ],
     );
@@ -406,26 +493,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
       ),
       child: Row(
         children: [
-          // 프사 영역
-          Stack(
-            children: [
-              _buildProfileImage(),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: GestureDetector(
-                  onTap: _showProfileImagePicker,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                        color: Colors.white, shape: BoxShape.circle),
-                    child: const Icon(Icons.camera_alt_outlined,
-                        size: 16, color: Color(0xFF4A7C59)),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          _buildProfileImage(),
           const SizedBox(width: 16),
           // 텍스트 정보
           Expanded(
@@ -457,7 +525,11 @@ class _MyPageScreenState extends State<MyPageScreen> {
               ],
             ),
           ),
-          const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+          IconButton(
+            tooltip: '프로필 수정',
+            onPressed: _showProfileEditor,
+            icon: const Icon(Icons.edit_outlined, color: Color(0xFF4A7C59)),
+          ),
         ],
       ),
     );
@@ -536,8 +608,8 @@ class _MyPageScreenState extends State<MyPageScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: const [
+                const Row(
+                  children: [
                     Icon(Icons.bookmark_border_rounded,
                         color: Color(0xFF6B4E31)),
                     SizedBox(width: 8),
@@ -593,8 +665,8 @@ class _MyPageScreenState extends State<MyPageScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: const [
+          const Row(
+            children: [
               Icon(Icons.book_outlined, color: Color(0xFF6B4E31)),
               SizedBox(width: 8),
               Text("나의 여행 기록",

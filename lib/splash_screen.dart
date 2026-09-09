@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart'; // 🌟 카카오 로그인 도구상자
 import 'auth_service.dart';
+import 'friend_service.dart';
 import 'main_screen.dart';
 import 'worldcup_screen.dart'; // WorldCupScreen이 있는 파일
 
@@ -83,12 +84,15 @@ class _SplashScreenState extends State<SplashScreen> {
       // 카카오 토큰을 백엔드로 보내 SoomTrip JWT를 발급받아 저장합니다.
       await AuthService.loginWithKakao(token.accessToken);
 
-      // 카카오 프로필 닉네임을 SoomTrip 사용자 DB에도 동기화합니다.
+      // 기존 닉네임을 보존하고, 비어 있는 경우에만 카카오 닉네임을 사용합니다.
       try {
-        final kakaoUser = await UserApi.instance.me();
-        final nickname = kakaoUser.kakaoAccount?.profile?.nickname;
-        if (nickname != null && nickname.trim().isNotEmpty) {
-          await AuthService.updateNickname(nickname);
+        final user = await FriendService.getMe();
+        if (user.nickname.trim().isEmpty) {
+          final kakaoUser = await UserApi.instance.me();
+          final nickname = kakaoUser.kakaoAccount?.profile?.nickname;
+          if (nickname != null && nickname.trim().isNotEmpty) {
+            await AuthService.updateNickname(nickname);
+          }
         }
       } catch (error) {
         debugPrint('[Kakao Login] Nickname sync failed: $error');

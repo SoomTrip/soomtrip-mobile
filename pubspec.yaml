@@ -45,6 +45,7 @@ dependencies:
   flutter_drawing_board: ^1.0.1+2
   animated_text_kit: ^4.2.3
   flutter_naver_map: ^1.4.4
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:
