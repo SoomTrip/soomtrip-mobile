@@ -4,8 +4,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  static const _authUrl = 'https://soomtrip-api.cspc.me/auth/kakao';
-  static const _meUrl = 'https://soomtrip-api.cspc.me/users/me';
+  static const _authUrl = 'https://soomtrip.cspc.me/auth/kakao';
+  static const _meUrl = 'https://soomtrip.cspc.me/users/me';
   static const _jwtKey = 'soomtrip_access_token';
   static const _refreshKey = 'soomtrip_refresh_token';
   static Future<String?>? _refreshInFlight;
@@ -97,7 +97,7 @@ class AuthService {
     if (refresh != null && refresh.isNotEmpty) {
       final response = await http
           .post(
-            Uri.parse('https://soomtrip-api.cspc.me/auth/logout'),
+            Uri.parse('https://soomtrip.cspc.me/auth/logout'),
             headers: const {'Content-Type': 'application/json'},
             body: jsonEncode({'refresh_token': refresh}),
           )
@@ -106,6 +106,31 @@ class AuthService {
         throw Exception('로그아웃 실패 (${response.statusCode})');
       }
     }
+    _sessionVersion++;
+    await preferences.remove(_jwtKey);
+    await preferences.remove(_refreshKey);
+  }
+
+  // 회원 탈퇴: 서버가 저장한 여행지/일기/스탬프/친구/리프레시 토큰까지 전부
+  // 삭제하므로, 여기서는 로컬 세션만 정리하면 된다.
+  static Future<void> deleteAccount() async {
+    final jwt = await getJwt();
+    if (jwt == null || jwt.isEmpty) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    final response = await client
+        .delete(
+          Uri.parse(_meUrl),
+          headers: {'Authorization': 'Bearer $jwt'},
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('회원 탈퇴 실패 (${response.statusCode})');
+    }
+
+    final preferences = await SharedPreferences.getInstance();
     _sessionVersion++;
     await preferences.remove(_jwtKey);
     await preferences.remove(_refreshKey);
@@ -133,7 +158,7 @@ class AuthService {
     if (refresh == null || refresh.isEmpty) return null;
     final response = await http
         .post(
-          Uri.parse('https://soomtrip-api.cspc.me/auth/refresh'),
+          Uri.parse('https://soomtrip.cspc.me/auth/refresh'),
           headers: const {'Content-Type': 'application/json'},
           body: jsonEncode({'refresh_token': refresh}),
         )
@@ -162,7 +187,7 @@ class _AuthenticatedClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     if (request.url.scheme != 'https' ||
-        request.url.host != 'soomtrip-api.cspc.me') {
+        request.url.host != 'soomtrip.cspc.me') {
       throw ArgumentError('인증 클라이언트는 숨트립 API에만 사용할 수 있습니다.');
     }
     // Buffer once so JSON and multipart uploads can be replayed exactly once.

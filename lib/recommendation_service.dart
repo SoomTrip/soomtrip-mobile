@@ -7,7 +7,7 @@ import 'auth_service.dart';
 
 class RecommendationService {
   static const _recommendationsUrl =
-      'https://soomtrip-api.cspc.me/recommendations';
+      'https://soomtrip.cspc.me/recommendations';
 
   static Future<Map<String, dynamic>> create(int preferenceId) async {
     final jwt = await AuthService.getJwt();

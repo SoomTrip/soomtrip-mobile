@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 
 class PreferenceService {
-  static const _preferencesUrl = 'https://soomtrip-api.cspc.me/preferences';
+  static const _preferencesUrl = 'https://soomtrip.cspc.me/preferences';
 
   static Future<int> save(Map<String, dynamic> preferences) async {
     final jwt = await AuthService.getJwt();
