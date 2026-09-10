@@ -446,15 +446,40 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
                       onPressed: () => setState(
                         () => _showBackgroundEffect = !_showBackgroundEffect,
                       ),
-                      icon: Icon(
-                        _showBackgroundEffect
-                            ? Icons.toggle_on_rounded
-                            : Icons.toggle_off_rounded,
-                        size: 22,
-                        color: _showBackgroundEffect
-                            ? const Color(0xFF4A7C59)
-                            : Colors.white,
-                      ),
+                      icon: _showBackgroundEffect
+                          ? const Icon(Icons.toggle_on_rounded,
+                              size: 22, color: Color(0xFF4A7C59))
+                          // Material 아이콘은 단색이라 꺼짐 상태에서 흰색으로 채우면
+                          // 테두리까지 같이 흰색이 되어 배경에 묻힘.
+                          // 테두리는 초록색을 유지하도록 직접 그린 스위치 모양으로 대체.
+                          : Container(
+                              width: 22,
+                              height: 22,
+                              alignment: Alignment.center,
+                              child: Container(
+                                width: 20,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                      color: const Color(0xFF4A7C59),
+                                      width: 1.5),
+                                ),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Container(
+                                    margin: const EdgeInsets.all(1),
+                                    width: 8,
+                                    height: 8,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF4A7C59),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                       label:
                           Text('배경 효과 ${_showBackgroundEffect ? "ON" : "OFF"}'),
                       style: TextButton.styleFrom(
