@@ -10,6 +10,7 @@ import 'package:soomtrip/my_destination_screen.dart';
 import 'auth_service.dart';
 import 'friend_service.dart';
 import 'saved_region_service.dart';
+import 'share_service.dart';
 import 'splash_screen.dart';
 
 class MyPageScreen extends StatefulWidget {
@@ -37,6 +38,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
   String? _selectedProfileAsset;
   Uint8List? _selectedProfileBytes;
   int? _savedDestinationCount;
+  List<ShareRequest> _pendingReceivedShares = [];
 
   @override
   void initState() {
@@ -44,6 +46,101 @@ class _MyPageScreenState extends State<MyPageScreen> {
     _savedDestinationCount = SavedRegionService.cachedRegions?.length;
     _loadUserProfile();
     _loadSavedDestinationCount();
+    _loadReceivedShares();
+  }
+
+  Future<void> _loadReceivedShares() async {
+    try {
+      final shares = await ShareService.getReceived();
+      if (!mounted) return;
+      setState(() => _pendingReceivedShares =
+          shares.where((share) => share.status == 'PENDING').toList());
+    } catch (error) {
+      debugPrint('[My Page] Failed to load received shares: $error');
+    }
+  }
+
+  Future<void> _respondToShare(ShareRequest request, bool accept) async {
+    Navigator.pop(context);
+    try {
+      accept
+          ? await ShareService.accept(request.shareId)
+          : await ShareService.reject(request.shareId);
+      if (accept) {
+        SavedRegionService.invalidateCache();
+        await _loadSavedDestinationCount();
+      }
+      if (!mounted) return;
+      setState(() => _pendingReceivedShares = _pendingReceivedShares
+          .where((share) => share.shareId != request.shareId)
+          .toList());
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(accept
+              ? '${request.regionName} 여행지를 저장했어요.'
+              : '${request.regionName} 공유를 거절했어요.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', ''))));
+    }
+  }
+
+  void _showReceivedSharesSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: const Color(0xFFFBF9F4),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 4, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('받은 공유 여행지 ${_pendingReceivedShares.length}개',
+                  style:
+                      const TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              if (_pendingReceivedShares.isEmpty)
+                const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 32),
+                    child: Center(child: Text('받은 공유 요청이 없어요.')))
+              else
+                ..._pendingReceivedShares.map(_buildReceivedShareItem),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReceivedShareItem(ShareRequest request) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(request.regionName,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text('${request.senderNickname} 님이 공유했어요',
+                  style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            ],
+          ),
+        ),
+        TextButton(
+            onPressed: () => _respondToShare(request, false),
+            child: const Text('거절', style: TextStyle(color: Colors.grey))),
+        ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4A7C59),
+                foregroundColor: Colors.white),
+            onPressed: () => _respondToShare(request, true),
+            child: const Text('수락')),
+      ]),
+    );
   }
 
   Future<void> _loadSavedDestinationCount() async {
@@ -405,9 +502,22 @@ class _MyPageScreenState extends State<MyPageScreen> {
                 fontSize: 22)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_none_rounded,
-                color: Color(0xFF6B4E31)),
-            onPressed: () {},
+            icon: Stack(clipBehavior: Clip.none, children: [
+              const Icon(Icons.notifications_none_rounded,
+                  color: Color(0xFF6B4E31)),
+              if (_pendingReceivedShares.isNotEmpty)
+                Positioned(
+                  right: -1,
+                  top: -1,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: const BoxDecoration(
+                        color: Color(0xFFE57373), shape: BoxShape.circle),
+                  ),
+                ),
+            ]),
+            onPressed: _showReceivedSharesSheet,
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined, color: Color(0xFF6B4E31)),

@@ -1,3 +1,4 @@
+import 'share_region_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -96,15 +97,16 @@ class _FriendsScreenState extends State<FriendsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFFBF9F4),
         title: const Text('친구 삭제'),
         content: Text('${user.nickname}님을 친구 목록에서 삭제할까요?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('취소')),
+              child: const Text('취소', style: TextStyle(color: Colors.grey))),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('삭제')),
+              child: const Text('삭제', style: TextStyle(color: Color(0xFFE57373)))),
         ],
       ),
     );
@@ -290,9 +292,15 @@ class _FriendsScreenState extends State<FriendsScreen> {
       title: Text(user.nickname,
           style: const TextStyle(fontWeight: FontWeight.bold)),
       subtitle: Text(user.userCode),
-      trailing: IconButton(
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        IconButton(tooltip: '여행지 보내기',
+          icon: const Icon(Icons.send_rounded, color: Color(0xFF4A7C59)),
+          onPressed: () => showDialog<void>(context: context,
+            builder: (_) => ShareRegionDialog(friend: user))),
+        IconButton(
           icon: const Icon(Icons.person_remove_outlined, color: Colors.grey),
           onPressed: () => _removeFriend(relation)),
+      ]),
     );
   }
 
@@ -313,6 +321,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
+      backgroundColor: const Color(0xFFFBF9F4),
       builder: (context) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 4, 24, 32),
@@ -353,8 +362,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
         ])),
         TextButton(
             onPressed: () => _handleRequest(request, false),
-            child: const Text('거절')),
+            child: const Text('거절', style: TextStyle(color: Colors.grey))),
         ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4A7C59),
+                foregroundColor: Colors.white),
             onPressed: () => _handleRequest(request, true),
             child: const Text('수락')),
       ]),

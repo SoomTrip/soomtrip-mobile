@@ -50,18 +50,56 @@ class SavedSpot {
   }
 }
 
+class RegionShare {
+  final int shareId;
+  final int userId;
+  final String nickname;
+  final String? profileImage;
+  final String? status;
+
+  const RegionShare({
+    required this.shareId,
+    required this.userId,
+    required this.nickname,
+    this.profileImage,
+    this.status,
+  });
+
+  factory RegionShare.fromJson(Map<String, dynamic> json) {
+    final shareId = json['share_id'];
+    final userId = json['user_id'];
+    final nickname = json['nickname'];
+    if (shareId is! int || userId is! int || nickname is! String) {
+      throw const FormatException('공유 정보 응답 형식이 올바르지 않습니다.');
+    }
+    return RegionShare(
+      shareId: shareId,
+      userId: userId,
+      nickname: nickname,
+      profileImage: json['profile_image'] as String?,
+      status: json['status'] as String?,
+    );
+  }
+}
+
 class SavedRegion {
   final int id;
   final String regionName;
   final List<SavedSpot> spots;
   final String? mobilityChoice;
+  final RegionShare? sharedFrom;
+  final List<RegionShare> sharedTo;
 
   const SavedRegion({
     required this.id,
     required this.regionName,
     required this.spots,
     this.mobilityChoice,
+    this.sharedFrom,
+    this.sharedTo = const [],
   });
+
+  bool get isShared => sharedFrom != null || sharedTo.isNotEmpty;
 
   factory SavedRegion.fromJson(Map<String, dynamic> json) {
     final id = json['id'];
@@ -79,6 +117,15 @@ class SavedRegion {
       }
     }
 
+    final sharedFromJson = json['shared_from'];
+    final sharedToJson = json['shared_to'];
+    final sharedTo = <RegionShare>[];
+    if (sharedToJson is List) {
+      for (final item in sharedToJson) {
+        if (item is Map<String, dynamic>) sharedTo.add(RegionShare.fromJson(item));
+      }
+    }
+
     return SavedRegion(
       id: id,
       regionName: regionName.trim(),
@@ -86,18 +133,24 @@ class SavedRegion {
       mobilityChoice: json['mobility_choice'] is String
           ? json['mobility_choice'] as String
           : null,
+      sharedFrom: sharedFromJson is Map<String, dynamic>
+          ? RegionShare.fromJson(sharedFromJson)
+          : null,
+      sharedTo: List.unmodifiable(sharedTo),
     );
   }
 }
 
 class SavedRegionService {
-  static const _savedRegionsUrl = 'https://soomtrip-api.cspc.me/saved-regions';
+  static const _savedRegionsUrl = 'https://soomtrip.cspc.me/saved-regions';
   static List<SavedRegion>? _cachedRegions;
 
   static List<SavedRegion>? get cachedRegions {
     final cached = _cachedRegions;
     return cached == null ? null : List.unmodifiable(cached);
   }
+
+  static void invalidateCache() => _cachedRegions = null;
 
   static Future<List<SavedRegion>> getAll() async {
     final jwt = await AuthService.getJwt();
@@ -289,7 +342,7 @@ extension StampService on SavedRegionService {
     if (jwt == null || jwt.isEmpty) throw Exception('로그인이 필요합니다.');
 
     final response = await AuthService.client.get(
-      Uri.parse('https://soomtrip-api.cspc.me/stamps'),
+      Uri.parse('https://soomtrip.cspc.me/stamps'),
       headers: {'Authorization': 'Bearer $jwt'},
     ).timeout(const Duration(seconds: 15));
 

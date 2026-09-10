@@ -6,6 +6,58 @@ import 'package:soomtrip/route_service.dart';
 Map<String, dynamic> spot(String id) => {'content_id': id, 'name': id};
 
 void main() {
+  test('car alternative is sent to save and survives grouped reload', () {
+    final plan = RoutePlan.fromJson({'route_by_day': {'day1': {'spots': [
+      {...spot('A'), 'saved_region_spot_id': 1},
+      {...spot('B'), 'saved_region_spot_id': 2,
+        'distance_from_prev_km': 2.1, 'duration_from_prev_minutes': 30,
+        'car_alternative': {'mobility_choice': 'car',
+          'distance_from_prev_km': 3.2, 'duration_from_prev_minutes': 7}},
+    ]}}});
+    final entries = plan.toSaveEntries();
+    expect(entries.first.containsKey('car_alternative'), false);
+    expect(entries.last['duration_from_prev_minutes'], 30);
+    expect(entries.last['car_alternative'], {'mobility_choice': 'car',
+      'distance_from_prev_km': 3.2, 'duration_from_prev_minutes': 7});
+    final reloaded = RoutePlan.fromJson({'route_by_day': {'day1': [
+      {...spot('A'), 'saved_region_spot_id': 1},
+      {...spot('B'), 'saved_region_spot_id': 2, 'mobility_options': [
+        entries.last['car_alternative'],
+        {'mobility_choice': 'walk_transit', 'distance_from_prev_km': 2.1,
+          'duration_from_prev_minutes': 30},
+      ]},
+    ]}});
+    expect(reloaded.byDay[1]![1].travelLabel(), '도보이동 30분\n택시이동 7분');
+    expect(reloaded.toSaveEntries(), entries);
+  });
+
+  test('walking and car options render as two travel lines', () {
+    final plan = RoutePlan.fromJson({'route_by_day': {'day1': [spot('A'), {
+      ...spot('B'), 'mobility_options': [
+        {'mobility_choice': 'walk_transit', 'duration_from_prev_minutes': 25},
+        {'mobility_choice': 'car', 'duration_from_prev_minutes': 6},
+      ],
+    }]}});
+    expect(plan.byDay[1]![1].travelLabel(), '도보이동 25분\n택시이동 6분');
+  });
+
+  test('two entries for one arrival preserve both transport times', () {
+    final plan = RoutePlan.fromJson({'route_by_day': {'day1': [spot('A'),
+      {...spot('B'), 'saved_region_spot_id': 2, 'mobility_choice': 'car', 'duration_from_prev_minutes': 6},
+      {...spot('B'), 'saved_region_spot_id': 2, 'mobility_choice': 'walk_transit', 'duration_from_prev_minutes': 25},
+    ]}});
+    expect(plan.byDay[1]!.length, 2);
+    expect(plan.byDay[1]![1].travelLabel(), '도보이동 25분\n택시이동 6분');
+  });
+
+  test('optimize car alternative survives saved ID mapping', () {
+    final plan = RoutePlan.fromJson({'route_by_day': {'day1': {'spots': [spot('A'), {
+      ...spot('B'), 'duration_from_prev_minutes': 30,
+      'car_alternative': {'duration_minutes': 0, 'distance_km': 0.1},
+    }]}}});
+    expect(plan.byDay[1]![1].withSavedRegionSpotId(2).travelLabel(), '도보이동 30분\n택시이동 0분');
+  });
+
   test('saved mobility options preserve distance, duration and server mode', () {
     final plan = RoutePlan.fromJson({
       'route_by_day': {

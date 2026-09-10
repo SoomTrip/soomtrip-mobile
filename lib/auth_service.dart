@@ -4,8 +4,8 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
-  static const _authUrl = 'https://soomtrip-api.cspc.me/auth/kakao';
-  static const _meUrl = 'https://soomtrip-api.cspc.me/users/me';
+  static const _authUrl = 'https://soomtrip.cspc.me/auth/kakao';
+  static const _meUrl = 'https://soomtrip.cspc.me/users/me';
   static const _jwtKey = 'soomtrip_access_token';
   static const _refreshKey = 'soomtrip_refresh_token';
   static Future<String?>? _refreshInFlight;
@@ -97,7 +97,7 @@ class AuthService {
     if (refresh != null && refresh.isNotEmpty) {
       final response = await http
           .post(
-            Uri.parse('https://soomtrip-api.cspc.me/auth/logout'),
+            Uri.parse('https://soomtrip.cspc.me/auth/logout'),
             headers: const {'Content-Type': 'application/json'},
             body: jsonEncode({'refresh_token': refresh}),
           )
@@ -133,7 +133,7 @@ class AuthService {
     if (refresh == null || refresh.isEmpty) return null;
     final response = await http
         .post(
-          Uri.parse('https://soomtrip-api.cspc.me/auth/refresh'),
+          Uri.parse('https://soomtrip.cspc.me/auth/refresh'),
           headers: const {'Content-Type': 'application/json'},
           body: jsonEncode({'refresh_token': refresh}),
         )
@@ -162,7 +162,7 @@ class _AuthenticatedClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     if (request.url.scheme != 'https' ||
-        request.url.host != 'soomtrip-api.cspc.me') {
+        request.url.host != 'soomtrip.cspc.me') {
       throw ArgumentError('인증 클라이언트는 숨트립 API에만 사용할 수 있습니다.');
     }
     // Buffer once so JSON and multipart uploads can be replayed exactly once.

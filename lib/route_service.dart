@@ -15,6 +15,7 @@ class RouteSpot {
   final double? distanceFromPreviousKm;
   final int? durationFromPreviousMinutes;
   final String? mobilityChoice;
+  final List<Map<String, dynamic>> mobilityOptions;
 
   const RouteSpot({
     required this.savedRegionSpotId,
@@ -26,6 +27,7 @@ class RouteSpot {
     required this.distanceFromPreviousKm,
     required this.durationFromPreviousMinutes,
     required this.mobilityChoice,
+    this.mobilityOptions = const [],
   });
 
   factory RouteSpot.fromJson(Map<String, dynamic> json) {
@@ -37,7 +39,26 @@ class RouteSpot {
       return int.tryParse(text) ?? double.tryParse(text)?.round();
     }
 
+    final options = <Map<String, dynamic>>[
+      if (json['mobility_options'] is List)
+        for (final option in json['mobility_options'] as List)
+          if (option is Map) Map<String, dynamic>.from(option),
+    ];
+    final alternative = json['car_alternative'];
+    if (alternative is Map) {
+      options.add({
+        'mobility_choice': 'car',
+        'duration_from_prev_minutes': alternative['duration_from_prev_minutes'] ?? alternative['duration_minutes'],
+        'distance_from_prev_km': alternative['distance_from_prev_km'] ?? alternative['distance_km'],
+      });
+      options.insert(0, {
+        'mobility_choice': json['mobility_choice'] ?? 'walk_transit',
+        'duration_from_prev_minutes': json['duration_from_prev_minutes'],
+        'distance_from_prev_km': json['distance_from_prev_km'],
+      });
+    }
     return RouteSpot(
+      mobilityOptions: options,
       savedRegionSpotId: integer(json['saved_region_spot_id']),
       contentId:
           json['content_id'] is String ? json['content_id'] as String : null,
@@ -55,7 +76,38 @@ class RouteSpot {
     );
   }
 
-  RouteSpot withSavedRegionSpotId(int id) => RouteSpot(
+  List<Map<String, dynamic>> get travelOptions => [
+    if (mobilityChoice != null) {
+      'mobility_choice': mobilityChoice,
+      'duration_from_prev_minutes': durationFromPreviousMinutes,
+      'distance_from_prev_km': distanceFromPreviousKm,
+    },
+    ...mobilityOptions,
+  ];
+
+  String travelLabel({String? fallbackMode}) {
+    int? minutesFor(String mode) {
+      for (final option in travelOptions) {
+        if (option['mobility_choice'] != mode) continue;
+        final value = option['duration_from_prev_minutes'];
+        final minutes = value is num ? value.round() : double.tryParse('$value')?.round();
+        if (minutes != null) return minutes;
+      }
+      return null;
+    }
+    final walk = minutesFor('walk_transit');
+    final car = minutesFor('car');
+    if (walk != null && car != null) return '도보이동 $walk분\n택시이동 $car분';
+    final minutes = durationFromPreviousMinutes;
+    if (minutes == null) return '경로 정보를\n가져올 수 없습니다';
+    final mode = switch (mobilityChoice ?? fallbackMode) {
+      'walk_transit' => '도보이동', 'car' => '자차이동', _ => '이동',
+    };
+    return '$mode $minutes분';
+  }
+
+  RouteSpot withSavedRegionSpotId(int? id, {List<Map<String, dynamic>>? options}) => RouteSpot(
+        mobilityOptions: options ?? mobilityOptions,
         savedRegionSpotId: id,
         contentId: contentId,
         name: name,
@@ -103,7 +155,8 @@ class RoutePlan {
           final options = spotJson['mobility_options'];
           if (options is List && options.isNotEmpty) {
             final modes = options.whereType<Map>().toList();
-            final preferredMode = spotJson['mobility_choice'];
+            final preferredMode = spotJson['mobility_choice'] ??
+                (modes.any((option) => option['mobility_choice'] == 'walk_transit') ? 'walk_transit' : null);
             final matching = modes
                 .where((option) => option['mobility_choice'] == preferredMode);
             final selected = matching.isNotEmpty
@@ -128,6 +181,8 @@ class RoutePlan {
           if (index == 0) {
             spotJson['distance_from_prev_km'] = null;
             spotJson['duration_from_prev_minutes'] = null;
+            spotJson['mobility_options'] = const [];
+            spotJson['car_alternative'] = null;
           }
           if (index > 0 && index < segments.length) {
             final segment = segments[index];
@@ -157,7 +212,13 @@ class RoutePlan {
                 spot.contentId == previous.contentId;
             final sameSavedId = spot.savedRegionSpotId != null &&
                 spot.savedRegionSpotId == previous.savedRegionSpotId;
-            if (sameContent || sameSavedId) continue;
+            if (sameContent || sameSavedId) {
+              if (parsedSpots.length > 1 && spot.mobilityChoice != previous.mobilityChoice) {
+                parsedSpots[parsedSpots.length - 1] = previous.withSavedRegionSpotId(
+                  previous.savedRegionSpotId, options: [...previous.travelOptions, ...spot.travelOptions]);
+              }
+              continue;
+            }
           }
           parsedSpots.add(spot);
         }
@@ -178,13 +239,22 @@ class RoutePlan {
         if (spotId == null) {
           throw const FormatException('저장할 경로의 장소 ID가 없습니다.');
         }
+        final options = spots[index].travelOptions;
+        final walk = options.where((option) => option['mobility_choice'] == 'walk_transit');
+        final car = options.where((option) => option['mobility_choice'] == 'car');
+        final hasAlternative = index > 0 && walk.isNotEmpty && car.isNotEmpty;
         entries.add({
           'saved_region_spot_id': spotId,
           'visit_day': day,
           'visit_order': index + 1,
-          'distance_from_prev_km': spots[index].distanceFromPreviousKm,
+          'distance_from_prev_km': hasAlternative ? walk.last['distance_from_prev_km'] : spots[index].distanceFromPreviousKm,
           'duration_from_prev_minutes':
-              spots[index].durationFromPreviousMinutes,
+              hasAlternative ? walk.last['duration_from_prev_minutes'] : spots[index].durationFromPreviousMinutes,
+          if (hasAlternative) 'car_alternative': {
+            'mobility_choice': 'car',
+            'distance_from_prev_km': car.last['distance_from_prev_km'],
+            'duration_from_prev_minutes': car.last['duration_from_prev_minutes'],
+          },
         });
       }
     });
@@ -193,7 +263,7 @@ class RoutePlan {
 }
 
 class RouteService {
-  static const _baseUrl = 'https://soomtrip-api.cspc.me';
+  static const _baseUrl = 'https://soomtrip.cspc.me';
 
   static void _logTravelValues(String stage, RoutePlan plan) {
     if (!kDebugMode) return;

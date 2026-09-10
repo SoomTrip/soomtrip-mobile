@@ -7,6 +7,6 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MyDestinationsScreen(showBackButton: false);
+    return const MyDestinationsScreen(showBackButton: false, homeLayout: true);
   }
 }

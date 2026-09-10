@@ -516,7 +516,7 @@ class _StampScreenState extends State<StampScreen> {
             // 2. 하단 진행도 및 버튼
             // ==========================================
             const SizedBox(height: 12),
-            Text("여행 도장 ${myStamps.length}개 획득!",
+            Text("도장을 클릭하면 그림일기를 확인할 수 있어요!",
                 style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
