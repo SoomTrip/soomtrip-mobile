@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 
 import 'auth_service.dart';
 import 'saved_region_service.dart';
@@ -124,7 +123,19 @@ class RoutePlan {
                   segment['mobility_choice'] ?? spotJson['mobility_choice'];
             }
           }
-          parsedSpots.add(RouteSpot.fromJson(spotJson));
+          final spot = RouteSpot.fromJson(spotJson);
+          // Collapse only consecutive copies of the same place. A later
+          // return visit remains valid, and segment parsing keeps raw indices.
+          if (parsedSpots.isNotEmpty) {
+            final previous = parsedSpots.last;
+            final sameContent = spot.contentId != null &&
+                spot.contentId!.isNotEmpty &&
+                spot.contentId == previous.contentId;
+            final sameSavedId = spot.savedRegionSpotId != null &&
+                spot.savedRegionSpotId == previous.savedRegionSpotId;
+            if (sameContent || sameSavedId) continue;
+          }
+          parsedSpots.add(spot);
         }
         days[day] = parsedSpots;
       });
@@ -187,9 +198,11 @@ class RouteService {
         final spot = spots[index];
         if (spot is! Map) continue;
         final km = spot.containsKey('distance_from_prev_km')
-            ? spot['distance_from_prev_km'] : 'missing';
+            ? spot['distance_from_prev_km']
+            : 'missing';
         final minutes = spot.containsKey('duration_from_prev_minutes')
-            ? spot['duration_from_prev_minutes'] : 'missing';
+            ? spot['duration_from_prev_minutes']
+            : 'missing';
         debugPrint('[Route Time][response] $day #${index + 1} '
             'content=${spot['content_id']} km=$km min=$minutes');
       }
@@ -203,20 +216,24 @@ class RouteService {
   }
 
   static Future<RoutePlan> optimize({
+    required int savedRegionId,
     required List<SavedSpot> spots,
     required int dayCount,
-    required String mobilityChoice,
   }) async {
     final jwt = await _jwt();
-    final uniqueSpots = <SavedSpot>[];
-    final seenSpotKeys = <String>{};
+    final spotsByKey = <String, SavedSpot>{};
     for (final spot in spots) {
-      final key = spot.id?.toString() ??
-          (spot.contentId.isNotEmpty
-              ? spot.contentId
-              : '${spot.name}:${spot.latitude}:${spot.longitude}');
-      if (seenSpotKeys.add(key)) uniqueSpots.add(spot);
+      final key = spot.contentId.isNotEmpty
+          ? 'content:${spot.contentId}'
+          : spot.id != null
+              ? 'saved:${spot.id}'
+              : '${spot.name}:${spot.latitude}:${spot.longitude}';
+      final existing = spotsByKey[key];
+      if (existing == null || (existing.isAnchor && !spot.isAnchor)) {
+        spotsByKey[key] = spot;
+      }
     }
+    final uniqueSpots = spotsByKey.values.toList(growable: false);
     final selectedSpots = uniqueSpots.map((spot) => {
           'content_id': spot.contentId,
           'name': spot.name,
@@ -225,7 +242,7 @@ class RouteService {
           'longitude': spot.longitude,
           'category_label': spot.categoryLabel,
         });
-    final response = await http
+    final response = await AuthService.client
         .post(
           Uri.parse('$_baseUrl/route/optimize'),
           headers: {
@@ -233,9 +250,9 @@ class RouteService {
             'Authorization': 'Bearer $jwt',
           },
           body: jsonEncode({
+            'saved_region_id': savedRegionId,
             'selected_spots': selectedSpots.toList(),
             'num_days': dayCount,
-            'mobility_choice': mobilityChoice,
           }),
         )
         .timeout(const Duration(seconds: 30));
@@ -249,7 +266,7 @@ class RouteService {
       throw const FormatException('여행 경로 응답 형식이 올바르지 않습니다.');
     }
     _logOptimizeFields(body);
-    final plan = RoutePlan.fromJson(body, mobilityChoice: mobilityChoice);
+    final plan = RoutePlan.fromJson(body);
     final idsByContentId = <String, int>{
       for (final spot in uniqueSpots)
         if (spot.id != null && spot.contentId.isNotEmpty)
@@ -273,12 +290,11 @@ class RouteService {
   static Future<void> save({
     required int savedRegionId,
     required RoutePlan plan,
-    required String mobilityChoice,
   }) async {
     final jwt = await _jwt();
     final entries = plan.toSaveEntries();
     _logTravelValues('save-request', plan);
-    final response = await http
+    final response = await AuthService.client
         .post(
           Uri.parse('$_baseUrl/route/save'),
           headers: {
@@ -287,7 +303,6 @@ class RouteService {
           },
           body: jsonEncode({
             'saved_region_id': savedRegionId,
-            'mobility_choice': mobilityChoice,
             'entries': entries,
           }),
         )
@@ -300,7 +315,7 @@ class RouteService {
 
   static Future<RoutePlan> getSaved(int savedRegionId) async {
     final jwt = await _jwt();
-    final response = await http.get(
+    final response = await AuthService.client.get(
       Uri.parse('$_baseUrl/route/saved-region/$savedRegionId'),
       headers: {'Authorization': 'Bearer $jwt'},
     ).timeout(const Duration(seconds: 15));

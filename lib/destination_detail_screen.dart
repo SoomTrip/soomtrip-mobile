@@ -35,6 +35,14 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final placesByCategory = _placesByCategory;
+    final spotCount = placesByCategory.values
+        .expand((spots) => spots)
+        .map((spot) => spot.contentId.isNotEmpty
+            ? spot.contentId
+            : '${spot.name}:${spot.latitude}:${spot.longitude}')
+        .toSet()
+        .length;
+    final showFewSpotsNotice = spotCount <= 15;
     return Scaffold(
       backgroundColor: const Color(0xFFFBF9F4),
       appBar: AppBar(
@@ -70,16 +78,36 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
             ),
             Expanded(
               child: placesByCategory.isEmpty
-                  ? const Center(child: Text('저장된 장소가 없어요.'))
+                  ? const Center(
+                      child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: Text(
+                          '저장된 장소가 없어요.\n\n사람이 많지 않은 숨겨진 여행지는 추천 장소가 적을 수 있어요😢',
+                          textAlign: TextAlign.center,
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.black54)),
+                    ))
                   : ListView.separated(
                       physics: const BouncingScrollPhysics(),
                       padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-                      itemCount: placesByCategory.length + 1,
+                      itemCount: placesByCategory.length +
+                          1 +
+                          (showFewSpotsNotice ? 1 : 0),
                       separatorBuilder: (_, __) => const SizedBox(height: 24),
                       itemBuilder: (context, index) {
                         if (index == 0) return _buildTravelPeriodSection();
+                        if (index == placesByCategory.length + 1) {
+                          return const Text(
+                            '사람이 많지 않은 숨겨진 여행지는 추천 장소가 적을 수 있어요😢',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.black54,
+                                height: 1.5),
+                          );
+                        }
                         final entry =
-                          placesByCategory.entries.elementAt(index - 1);
+                            placesByCategory.entries.elementAt(index - 1);
                         return _buildCategorySection(entry.key, entry.value);
                       },
                     ),
@@ -108,6 +136,7 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => RouteScreen(
+                          mobilityChoice: widget.destination.mobilityChoice,
                           savedRegionId: widget.destination.id,
                           travelPeriod: _selectedTravelPeriod!,
                           selectedSpots: widget.destination.spots
@@ -166,8 +195,7 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
                 Expanded(
                   child: _buildTravelPeriodOption(_travelPeriods[index]),
                 ),
-                if (index < _travelPeriods.length - 1)
-                  const SizedBox(width: 8),
+                if (index < _travelPeriods.length - 1) const SizedBox(width: 8),
               ],
             ],
           ),
@@ -186,9 +214,8 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFF4A7C59) : Colors.white,
           border: Border.all(
-            color: isSelected
-                ? const Color(0xFF4A7C59)
-                : const Color(0xFFF0F0F0),
+            color:
+                isSelected ? const Color(0xFF4A7C59) : const Color(0xFFF0F0F0),
           ),
           borderRadius: BorderRadius.circular(14),
         ),
@@ -273,7 +300,7 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
       await _showSelectionLimitDialog(
         selectingRestaurant
             ? '식당은 최대 ${limits.restaurant}개까지 선택가능해요!'
-          : '식당 외 스팟은 최대 ${limits.other}개까지 선택가능해요!',
+            : '식당 외 스팟은 최대 ${limits.other}개까지 선택가능해요!',
       );
       return;
     }

@@ -20,7 +20,7 @@ class RecommendationService {
     debugPrint('[Recommendation API] Request: $requestBody');
     debugPrint('[Recommendation API] Authorization: Bearer token included');
 
-    final response = await http
+    final response = await AuthService.client
         .post(
           Uri.parse(_recommendationsUrl),
           headers: {
@@ -31,7 +31,8 @@ class RecommendationService {
         )
         .timeout(
           const Duration(seconds: 60),
-          onTimeout: () => throw Exception('여행지 추천 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.'),
+          onTimeout: () =>
+              throw Exception('여행지 추천 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.'),
         );
 
     debugPrint('[Recommendation API] Status: ${response.statusCode}');
@@ -62,7 +63,13 @@ class RecommendationService {
       throw const FormatException('추천 여행지 이름이 없습니다.');
     }
 
-    return firstCandidate;
+    final mobilityChoice = body['mobility_choice'];
+    if (mobilityChoice != 'car' && mobilityChoice != 'walk_transit') {
+      throw const FormatException('추천 응답의 이동수단을 확인할 수 없습니다.');
+    }
+    // The API supplies mobility at the response root. Keep it with the
+    // selected candidate so saving/re-rolling never loses that recommendation's mode.
+    return {...firstCandidate, 'mobility_choice': mobilityChoice};
   }
 
   static String _errorMessage(http.Response response) {

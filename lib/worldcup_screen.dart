@@ -382,7 +382,7 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
                                 child: Center(
                                   child: _buildStickerOnly(
                                     assetPath: selectedStickers[2]!,
-                                    width: 440,
+                                    width: 450,
                                     height: 225,
                                     rotation: 0.0,
                                   ),
@@ -422,29 +422,6 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
               ),
             ),
 
-            if (_isCompleted)
-              TextButton.icon(
-                onPressed: () => setState(
-                  () => _showBackgroundEffect = !_showBackgroundEffect,
-                ),
-                icon: Icon(
-                  _showBackgroundEffect
-                      ? Icons.toggle_on_rounded
-                      : Icons.toggle_off_rounded,
-                  size: 22,
-                ),
-                label: Text('배경 효과 ${_showBackgroundEffect ? "ON" : "OFF"}'),
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF4A7C59),
-                  textStyle: const TextStyle(
-                    fontSize: 12,
-                    fontFamily: 'CustomFont',
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-
             Padding(
               padding: const EdgeInsets.only(top: 8, bottom: 4),
               child: Text(
@@ -462,11 +439,39 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
             // ===================================
             Expanded(
               flex: 4,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-                child: _isCompleted
-                    ? _buildResultButtons() // 완료되면 버튼 등장
-                    : _buildSliderArea(), // 아니면 기존 슬라이더
+              child: Column(
+                children: [
+                  if (_isCompleted)
+                    TextButton.icon(
+                      onPressed: () => setState(
+                        () => _showBackgroundEffect = !_showBackgroundEffect,
+                      ),
+                      icon: Icon(
+                        _showBackgroundEffect
+                            ? Icons.toggle_on_rounded
+                            : Icons.toggle_off_rounded,
+                        size: 22,
+                      ),
+                      label:
+                          Text('배경 효과 ${_showBackgroundEffect ? "ON" : "OFF"}'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF4A7C59),
+                        textStyle: const TextStyle(
+                          fontSize: 12,
+                          fontFamily: 'CustomFont',
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  Expanded(
+                      child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+                    child: _isCompleted
+                        ? _buildResultButtons() // 완료되면 버튼 등장
+                        : _buildSliderArea(), // 아니면 기존 슬라이더
+                  )),
+                ],
               ),
             ),
           ],

@@ -18,7 +18,7 @@ class PreferenceService {
     debugPrint('[Preference API] POST $_preferencesUrl');
     debugPrint('[Preference API] Request: $requestBody');
 
-    final response = await http
+    final response = await AuthService.client
         .post(
           Uri.parse(_preferencesUrl),
           headers: {

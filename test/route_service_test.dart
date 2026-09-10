@@ -6,6 +6,47 @@ import 'package:soomtrip/route_service.dart';
 Map<String, dynamic> spot(String id) => {'content_id': id, 'name': id};
 
 void main() {
+  test('consecutive duplicate anchors disappear without shifting travel times',
+      () {
+    final plan = RoutePlan.fromJson({
+      'route_by_day': {
+        'day1': {
+          'spots': [
+            {...spot('A'), 'name': '실제 관광지'},
+            {...spot('A'), 'name': '지역명'},
+            spot('B'),
+          ],
+          'segments': [
+            null,
+            {'distance_km': 0, 'duration_minutes': 0},
+            {'distance_km': 1.2, 'duration_minutes': 5}
+          ],
+        }
+      }
+    });
+    expect(plan.byDay[1]!.map((s) => s.name), ['실제 관광지', 'B']);
+    expect(plan.byDay[1]!.map((s) => s.durationFromPreviousMinutes), [null, 5]);
+    final saved = RoutePlan.fromJson({
+      'route_by_day': {
+        'day1': [
+          {...spot('A'), 'saved_region_spot_id': 218},
+          {
+            ...spot('A'),
+            'saved_region_spot_id': 218,
+            'duration_from_prev_minutes': 0
+          },
+          {
+            ...spot('B'),
+            'saved_region_spot_id': 221,
+            'duration_from_prev_minutes': 5
+          },
+        ]
+      }
+    });
+    expect(saved.toSaveEntries().map((e) => e['visit_order']), [1, 2]);
+    expect(saved.toSaveEntries().last['duration_from_prev_minutes'], 5);
+  });
+
   test('new spot fields take priority, including nulls, and survive saving',
       () {
     final plan = RoutePlan.fromJson({

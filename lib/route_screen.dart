@@ -6,12 +6,14 @@ import 'route_service.dart';
 import 'saved_region_service.dart';
 
 class RouteScreen extends StatefulWidget {
+  final String? mobilityChoice;
   final int savedRegionId;
   final String travelPeriod;
   final List<SavedSpot> selectedSpots;
 
   const RouteScreen({
     super.key,
+    this.mobilityChoice,
     required this.savedRegionId,
     required this.travelPeriod,
     required this.selectedSpots,
@@ -66,14 +68,13 @@ class _RouteScreenState extends State<RouteScreen> {
 
     try {
       final plan = await RouteService.optimize(
+        savedRegionId: widget.savedRegionId,
         spots: widget.selectedSpots,
         dayCount: _dayCount,
-        mobilityChoice: 'car',
       );
       await RouteService.save(
         savedRegionId: widget.savedRegionId,
         plan: plan,
-        mobilityChoice: 'car',
       );
       RoutePlan savedPlan = plan;
       try {
@@ -241,11 +242,14 @@ class _RouteScreenState extends State<RouteScreen> {
             icon: const Icon(Icons.arrow_back_ios_new_rounded,
                 color: Colors.black87),
             onPressed: () => Navigator.pop(context)),
+        actions: [
+          if (_dayCount > 1) _buildDayTabs(),
+          const SizedBox(width: 12),
+        ],
       ),
       body: SafeArea(
         child: Column(
           children: [
-            if (_dayCount > 1) _buildDayTabs(),
             Expanded(child: _buildRouteContent()),
           ],
         ),
@@ -254,52 +258,42 @@ class _RouteScreenState extends State<RouteScreen> {
   }
 
   Widget _buildDayTabs() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: const Color(0xFFE7E2D8)),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Row(
-          children: [
-            for (var day = 1; day <= _dayCount; day++) ...[
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() {
-                    if (_selectedDay != day) _mapController = null;
-                    _selectedDay = day;
-                  }),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    height: 44,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: _selectedDay == day
-                          ? const Color(0xFF4A7C59)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(13),
-                    ),
-                    child: Text(
-                      '$day일차',
-                      style: TextStyle(
-                        color: _selectedDay == day
-                            ? Colors.white
-                            : const Color(0xFF777777),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var day = 1; day <= _dayCount; day++) ...[
+          GestureDetector(
+            onTap: () => setState(() {
+              if (_selectedDay != day) _mapController = null;
+              _selectedDay = day;
+            }),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: _selectedDay == day
+                    ? const Color(0xFF4A7C59)
+                    : Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFE7E2D8)),
+              ),
+              child: Text(
+                '$day일차',
+                style: TextStyle(
+                  color: _selectedDay == day
+                      ? Colors.white
+                      : const Color(0xFF777777),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
                 ),
               ),
-              if (day < _dayCount) const SizedBox(width: 4),
-            ],
-          ],
-        ),
-      ),
+            ),
+          ),
+          if (day < _dayCount) const SizedBox(width: 6),
+        ],
+      ],
     );
   }
 
@@ -434,18 +428,23 @@ class _RouteScreenState extends State<RouteScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 100),
                       itemCount: _currentSpots.length,
                       separatorBuilder: (context, index) => SizedBox(
-                        width: 110,
+                        width: 48,
                         child: Align(
                           alignment: Alignment.bottomCenter,
                           child: Padding(
                             padding: const EdgeInsets.only(bottom: 72),
-                            child: Text(
-                              _travelTime(_currentSpots[index + 1]),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Color(0xFF4A7C59),
-                                fontWeight: FontWeight.w600,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                _travelTime(_currentSpots[index + 1]),
+                                maxLines: 1,
+                                softWrap: false,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Color(0xFF4A7C59),
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),
@@ -524,7 +523,7 @@ class _RouteScreenState extends State<RouteScreen> {
   String _travelTime(RouteSpot spot) {
     final minutes = spot.durationFromPreviousMinutes;
     if (minutes == null) return '경로 정보를\n가져올 수 없습니다';
-    final mode = switch (spot.mobilityChoice) {
+    final mode = switch (spot.mobilityChoice ?? widget.mobilityChoice) {
       'walk_transit' => '도보',
       'car' => '자차',
       _ => '이동',

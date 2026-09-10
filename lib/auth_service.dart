@@ -7,6 +7,11 @@ class AuthService {
   static const _authUrl = 'https://soomtrip-api.cspc.me/auth/kakao';
   static const _meUrl = 'https://soomtrip-api.cspc.me/users/me';
   static const _jwtKey = 'soomtrip_access_token';
+  static const _refreshKey = 'soomtrip_refresh_token';
+  static Future<String?>? _refreshInFlight;
+  static int _sessionVersion = 0;
+  static http.Client get client => _AuthenticatedClient();
+  static const _introCompletedKey = 'soomtrip_intro_completed';
 
   static Future<void> loginWithKakao(String kakaoAccessToken) async {
     final response = await http
@@ -27,11 +32,17 @@ class AuthService {
     }
 
     final jwt = body['access_token'];
+    final refresh = body['refresh_token'];
     if (jwt is! String || jwt.isEmpty) {
       throw const FormatException('로그인 응답에 access_token이 없습니다.');
     }
+    if (refresh is! String || refresh.isEmpty) {
+      throw const FormatException('로그인 응답에 refresh_token이 없습니다.');
+    }
 
     final preferences = await SharedPreferences.getInstance();
+    _sessionVersion++;
+    await preferences.setString(_refreshKey, refresh);
     await preferences.setString(_jwtKey, jwt);
   }
 
@@ -44,7 +55,7 @@ class AuthService {
       throw Exception('로그인이 필요합니다.');
     }
 
-    final response = await http
+    final response = await client
         .patch(
           Uri.parse(_meUrl),
           headers: {
@@ -65,6 +76,16 @@ class AuthService {
     return preferences.getString(_jwtKey)?.isNotEmpty ?? false;
   }
 
+  static Future<bool> hasCompletedIntro() async {
+    final preferences = await SharedPreferences.getInstance();
+    return preferences.getBool(_introCompletedKey) ?? false;
+  }
+
+  static Future<void> markIntroCompleted() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setBool(_introCompletedKey, true);
+  }
+
   static Future<String?> getJwt() async {
     final preferences = await SharedPreferences.getInstance();
     return preferences.getString(_jwtKey);
@@ -72,6 +93,117 @@ class AuthService {
 
   static Future<void> logout() async {
     final preferences = await SharedPreferences.getInstance();
+    final refresh = preferences.getString(_refreshKey);
+    if (refresh != null && refresh.isNotEmpty) {
+      final response = await http
+          .post(
+            Uri.parse('https://soomtrip-api.cspc.me/auth/logout'),
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode({'refresh_token': refresh}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('로그아웃 실패 (${response.statusCode})');
+      }
+    }
+    _sessionVersion++;
     await preferences.remove(_jwtKey);
+    await preferences.remove(_refreshKey);
+  }
+
+  static Future<String?> _refreshAfterUnauthorized(
+      String? rejectedToken) async {
+    final current = await getJwt();
+    if (current != null && current != rejectedToken) return current;
+    final pending = _refreshInFlight;
+    if (pending != null) return pending;
+    final future = _refreshAccessToken();
+    _refreshInFlight = future;
+    try {
+      return await future;
+    } finally {
+      if (identical(_refreshInFlight, future)) _refreshInFlight = null;
+    }
+  }
+
+  static Future<String?> _refreshAccessToken() async {
+    final version = _sessionVersion;
+    final preferences = await SharedPreferences.getInstance();
+    final refresh = preferences.getString(_refreshKey);
+    if (refresh == null || refresh.isEmpty) return null;
+    final response = await http
+        .post(
+          Uri.parse('https://soomtrip-api.cspc.me/auth/refresh'),
+          headers: const {'Content-Type': 'application/json'},
+          body: jsonEncode({'refresh_token': refresh}),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (version != _sessionVersion) return null;
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      _sessionVersion++;
+      await preferences.remove(_jwtKey);
+      await preferences.remove(_refreshKey);
+      return null;
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('로그인 갱신 실패 (${response.statusCode})');
+    }
+    final body = jsonDecode(utf8.decode(response.bodyBytes));
+    final token = body is Map ? body['access_token'] : null;
+    if (token is! String || token.isEmpty) {
+      throw const FormatException('재발급 응답에 access_token이 없습니다.');
+    }
+    await preferences.setString(_jwtKey, token);
+    return token;
+  }
+}
+
+class _AuthenticatedClient extends http.BaseClient {
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (request.url.scheme != 'https' ||
+        request.url.host != 'soomtrip-api.cspc.me') {
+      throw ArgumentError('인증 클라이언트는 숨트립 API에만 사용할 수 있습니다.');
+    }
+    // Buffer once so JSON and multipart uploads can be replayed exactly once.
+    final bytes = await request.finalize().toBytes();
+    final version = AuthService._sessionVersion;
+    final token = await AuthService.getJwt();
+    Future<http.StreamedResponse> sendOnce(String? accessToken) async {
+      final copy = http.Request(request.method, request.url)
+        ..followRedirects = request.followRedirects
+        ..maxRedirects = request.maxRedirects
+        ..persistentConnection = request.persistentConnection
+        ..headers.addAll(request.headers)
+        ..bodyBytes = bytes;
+      copy.headers.remove('Authorization');
+      if (accessToken != null) {
+        copy.headers['Authorization'] = 'Bearer $accessToken';
+      }
+      final transport = http.Client();
+      try {
+        final response = await transport.send(copy);
+        final body = await response.stream.toBytes();
+        return http.StreamedResponse(Stream.value(body), response.statusCode,
+            headers: response.headers,
+            reasonPhrase: response.reasonPhrase,
+            isRedirect: response.isRedirect,
+            request: copy,
+            contentLength: body.length,
+            persistentConnection: response.persistentConnection);
+      } finally {
+        transport.close();
+      }
+    }
+
+    final response = await sendOnce(token);
+    if (response.statusCode != 401 || version != AuthService._sessionVersion) {
+      return response;
+    }
+    final refreshed = await AuthService._refreshAfterUnauthorized(token);
+    if (refreshed == null || version != AuthService._sessionVersion) {
+      return response;
+    }
+    return sendOnce(refreshed);
   }
 }

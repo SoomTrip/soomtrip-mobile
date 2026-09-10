@@ -59,7 +59,7 @@ class DiaryEntryService {
 
   static Future<DiaryEntry?> getBySavedRegion(int savedRegionId) async {
     final jwt = await _jwt();
-    final response = await http.get(
+    final response = await AuthService.client.get(
       Uri.parse('$_baseUrl/diary-entries/saved-region/$savedRegionId'),
       headers: {'Authorization': 'Bearer $jwt'},
     ).timeout(const Duration(seconds: 15));
@@ -95,7 +95,7 @@ class DiaryEntryService {
       ));
 
     final streamedResponse =
-        await request.send().timeout(const Duration(seconds: 30));
+        await AuthService.client.send(request).timeout(const Duration(seconds: 30));
     final response = await http.Response.fromStream(streamedResponse);
     debugPrint('[Diary Image API] POST status: ${response.statusCode}');
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -137,10 +137,10 @@ class DiaryEntryService {
       'Authorization': 'Bearer $jwt',
     };
     final response = isNew
-        ? await http
+        ? await AuthService.client
             .post(uri, headers: headers, body: jsonEncode(body))
             .timeout(const Duration(seconds: 15))
-        : await http
+        : await AuthService.client
             .patch(uri, headers: headers, body: jsonEncode(body))
             .timeout(const Duration(seconds: 15));
 

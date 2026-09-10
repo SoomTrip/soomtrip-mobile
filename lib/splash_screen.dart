@@ -5,7 +5,7 @@ import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart'; // 🌟 카
 import 'auth_service.dart';
 import 'friend_service.dart';
 import 'main_screen.dart';
-import 'worldcup_screen.dart'; // WorldCupScreen이 있는 파일
+import 'intro_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -37,7 +37,11 @@ class _SplashScreenState extends State<SplashScreen> {
     setState(() => isLoggedIn = true);
     await Future<void>.delayed(const Duration(seconds: 2));
     if (!mounted) return;
-    _openHome();
+    if (await AuthService.hasCompletedIntro()) {
+      _openHome();
+    } else {
+      _openIntro();
+    }
   }
 
   void _openHome() {
@@ -47,10 +51,10 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 
-  void _openWorldCup() {
+  void _openIntro() {
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => const WorldCupScreen()),
+      MaterialPageRoute(builder: (context) => const IntroScreen()),
     );
   }
 
@@ -99,7 +103,7 @@ class _SplashScreenState extends State<SplashScreen> {
       }
 
       if (!mounted) return;
-      _openWorldCup();
+      _openIntro();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -115,7 +119,7 @@ class _SplashScreenState extends State<SplashScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('테스트 모드로 입장합니다.')),
     );
-    _openWorldCup();
+    _openIntro();
   }
 
   @override

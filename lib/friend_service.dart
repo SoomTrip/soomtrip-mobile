@@ -71,7 +71,7 @@ class FriendService {
   }
 
   static Future<FriendUser> getMe() async {
-    final response = await http
+    final response = await AuthService.client
         .get(Uri.parse('$_baseUrl/users/me'), headers: await _headers())
         .timeout(const Duration(seconds: 15));
     _ensureSuccess(response, '내 정보 불러오기');
@@ -84,7 +84,7 @@ class FriendService {
       _getRelations('/friends/requests', '친구 요청 불러오기');
 
   static Future<void> requestFriend(String userCode) async {
-    final response = await http
+    final response = await AuthService.client
         .post(Uri.parse('$_baseUrl/friends/request'),
             headers: await _headers(json: true),
             body: jsonEncode({'user_code': userCode}))
@@ -98,7 +98,7 @@ class FriendService {
       _patch('/friends/$id/reject', '친구 요청 거절');
 
   static Future<void> remove(int id) async {
-    final response = await http
+    final response = await AuthService.client
         .delete(Uri.parse('$_baseUrl/friends/$id'), headers: await _headers())
         .timeout(const Duration(seconds: 15));
     _ensureSuccess(response, '친구 삭제');
@@ -106,7 +106,7 @@ class FriendService {
 
   static Future<List<FriendRelation>> _getRelations(
       String path, String action) async {
-    final response = await http
+    final response = await AuthService.client
         .get(Uri.parse('$_baseUrl$path'), headers: await _headers())
         .timeout(const Duration(seconds: 15));
     _ensureSuccess(response, action);
@@ -123,7 +123,7 @@ class FriendService {
   }
 
   static Future<void> _patch(String path, String action) async {
-    final response = await http
+    final response = await AuthService.client
         .patch(Uri.parse('$_baseUrl$path'), headers: await _headers())
         .timeout(const Duration(seconds: 15));
     _ensureSuccess(response, action);

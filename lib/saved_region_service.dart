@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 
 import 'auth_service.dart';
 
@@ -55,11 +54,13 @@ class SavedRegion {
   final int id;
   final String regionName;
   final List<SavedSpot> spots;
+  final String? mobilityChoice;
 
   const SavedRegion({
     required this.id,
     required this.regionName,
     required this.spots,
+    this.mobilityChoice,
   });
 
   factory SavedRegion.fromJson(Map<String, dynamic> json) {
@@ -82,6 +83,9 @@ class SavedRegion {
       id: id,
       regionName: regionName.trim(),
       spots: List.unmodifiable(spots),
+      mobilityChoice: json['mobility_choice'] is String
+          ? json['mobility_choice'] as String
+          : null,
     );
   }
 }
@@ -101,7 +105,7 @@ class SavedRegionService {
       throw Exception('로그인이 필요합니다.');
     }
 
-    final response = await http.get(
+    final response = await AuthService.client.get(
       Uri.parse(_savedRegionsUrl),
       headers: {'Authorization': 'Bearer $jwt'},
     ).timeout(const Duration(seconds: 15));
@@ -161,6 +165,23 @@ class SavedRegionService {
         final spotContentId = spot['content_id'];
         final spotName = spot['name'];
         if (spotContentId is! String || spotName is! String) continue;
+        final existingIndex =
+            spots.indexWhere((saved) => saved['content_id'] == spotContentId);
+        if (existingIndex >= 0) {
+          // The recommendation's region title can share its anchor's content
+          // ID. Keep one anchor with the actual attraction's name and category.
+          if (spots[existingIndex]['is_anchor'] == true) {
+            spots[existingIndex] = {
+              'content_id': spotContentId,
+              'name': spotName,
+              'latitude': spot['latitude'] ?? spot['lat'],
+              'longitude': spot['longitude'] ?? spot['lng'],
+              'category_label': spot['category_label'],
+              'is_anchor': true,
+            };
+          }
+          continue;
+        }
         spots.add({
           'content_id': spotContentId,
           'name': spotName,
@@ -172,9 +193,14 @@ class SavedRegionService {
       }
     }
 
+    final mobilityChoice = candidate['mobility_choice'];
+    if (mobilityChoice != 'car' && mobilityChoice != 'walk_transit') {
+      throw const FormatException('추천 응답의 이동수단을 확인할 수 없습니다.');
+    }
     final score = candidate['score'];
     final request = <String, dynamic>{
       'region_name': regionName.trim(),
+      'mobility_choice': mobilityChoice,
       'score': score is num ? score.round() : null,
       'spots': spots,
     };
@@ -183,7 +209,7 @@ class SavedRegionService {
     debugPrint('[Saved Region API] POST $_savedRegionsUrl');
     debugPrint('[Saved Region API] Request: $requestBody');
 
-    final response = await http
+    final response = await AuthService.client
         .post(
           Uri.parse(_savedRegionsUrl),
           headers: {
@@ -210,7 +236,7 @@ class SavedRegionService {
       throw Exception('로그인이 필요합니다.');
     }
 
-    final response = await http.delete(
+    final response = await AuthService.client.delete(
       Uri.parse('$_savedRegionsUrl/$savedRegionId'),
       headers: {'Authorization': 'Bearer $jwt'},
     ).timeout(const Duration(seconds: 15));
@@ -262,7 +288,7 @@ extension StampService on SavedRegionService {
     final jwt = await AuthService.getJwt();
     if (jwt == null || jwt.isEmpty) throw Exception('로그인이 필요합니다.');
 
-    final response = await http.get(
+    final response = await AuthService.client.get(
       Uri.parse('https://soomtrip-api.cspc.me/stamps'),
       headers: {'Authorization': 'Bearer $jwt'},
     ).timeout(const Duration(seconds: 15));

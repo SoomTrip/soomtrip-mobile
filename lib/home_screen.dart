@@ -243,7 +243,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
               icon: const Icon(Icons.approval, color: Colors.white),
-              label: const Text("일기 쓰고 도장 받기 🌱",
+              label: const Text("일기 쓰고 도장 받기",
                   style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
