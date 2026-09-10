@@ -529,7 +529,7 @@ class _GachaScreenState extends State<GachaScreen>
             ),
 
             Positioned(
-              top: 150,
+              top: 145,
               left: 130,
               child: SizedBox(
                 width: 140, // 글자가 밖으로 튀어나가지 않게 제한

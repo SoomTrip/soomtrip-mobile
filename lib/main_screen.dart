@@ -3,6 +3,7 @@ import 'worldcup_screen.dart';
 import 'my_page_screen.dart';
 import 'friends_screen.dart';
 import 'home_screen.dart';
+import 'stamp_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -12,13 +13,13 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  // 🌟 현재 선택된 탭의 번호 (0: 월드컵, 1: 홈, 2: 친구, 3: 마이페이지)
-  // 처음 앱을 켰을 때 '홈'이 먼저 보이도록 기본값을 1로 설정합니다.
-  int _currentIndex = 1;
+  // 월드컵, 도장, 홈, 친구, 마이 순서이며 처음에는 홈을 표시합니다.
+  int _currentIndex = 2;
 
   // Hot Reload 후에도 탭 구성이 즉시 반영되도록 매번 현재 목록을 반환합니다.
   List<Widget> get _pages => const [
         WorldCupScreen(),
+        StampScreen(),
         HomeScreen(),
         FriendsScreen(),
         MyPageScreen(),
@@ -62,11 +63,15 @@ class _MainScreenState extends State<MainScreen> {
           selectedFontSize: 12,
           unselectedFontSize: 12,
 
-          // 3. 4개의 탭 버튼들
+          // 3. 5개의 탭 버튼들
           items: const [
             BottomNavigationBarItem(
               icon: Icon(Icons.emoji_events_rounded), // 🏆 트로피 모양
               label: '월드컵',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.approval_rounded),
+              label: '도장',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.home_rounded), // 🏠 홈 모양
@@ -82,20 +87,6 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _HomeScreen extends StatelessWidget {
-  const _HomeScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.expand(
-      child: Image.asset(
-        'assets/images/intro_bg.png',
-        fit: BoxFit.cover,
       ),
     );
   }

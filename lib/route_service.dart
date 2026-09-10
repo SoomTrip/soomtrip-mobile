@@ -99,6 +99,30 @@ class RoutePlan {
           }
           final spotJson = Map<String, dynamic>.of(rawSpot);
           spotJson['mobility_choice'] ??= mobilityChoice;
+          // Saved routes now group travel values by mode inside mobility_options.
+          final options = spotJson['mobility_options'];
+          if (options is List && options.isNotEmpty) {
+            final modes = options.whereType<Map>().toList();
+            final preferredMode = spotJson['mobility_choice'];
+            final matching = modes
+                .where((option) => option['mobility_choice'] == preferredMode);
+            final selected = matching.isNotEmpty
+                ? matching.first
+                : preferredMode == null && modes.isNotEmpty
+                    ? modes.first
+                    : null;
+            if (selected != null) {
+              for (final field in [
+                'mobility_choice',
+                'distance_from_prev_km',
+                'duration_from_prev_minutes',
+              ]) {
+                if (selected.containsKey(field))
+                  spotJson[field] = selected[field];
+              }
+            }
+          }
+
           // The first spot has no incoming trip. segments[1] is spots[0]
           // -> spots[1], segments[2] is spots[1] -> spots[2], and so on.
           if (index == 0) {
@@ -320,6 +344,7 @@ class RouteService {
       headers: {'Authorization': 'Bearer $jwt'},
     ).timeout(const Duration(seconds: 15));
     debugPrint('[Route API] get ${response.statusCode}: ${response.body}');
+    if (response.statusCode == 404) return const RoutePlan({});
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('저장된 여행 경로 불러오기 실패 (${response.statusCode})');
     }

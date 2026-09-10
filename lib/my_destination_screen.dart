@@ -1,9 +1,12 @@
+import 'home_logo_button.dart';
 import 'package:flutter/material.dart';
 import 'destination_action_screen.dart'; // 🌟 두 번째 만들 상세 화면을 불러옵니다.
 import 'saved_region_service.dart';
 
 class MyDestinationsScreen extends StatefulWidget {
-  const MyDestinationsScreen({super.key});
+  const MyDestinationsScreen({super.key, this.showBackButton = true});
+
+  final bool showBackButton;
 
   @override
   State<MyDestinationsScreen> createState() => _MyDestinationsScreenState();
@@ -120,6 +123,8 @@ class _MyDestinationsScreenState extends State<MyDestinationsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFBF9F4), // 시안에 맞춘 따뜻한 아이보리 배경
       appBar: AppBar(
+        actions: const [HomeLogoButton()],
+        automaticallyImplyLeading: widget.showBackButton,
         title: const Text(
           "저장한 여행지 🗺️",
           style: TextStyle(

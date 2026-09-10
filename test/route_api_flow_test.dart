@@ -134,6 +134,16 @@ void main() {
     });
   }
 
+  test('missing saved route permits creation but server errors do not',
+      () async {
+    await http.runWithClient(() async {
+      expect((await RouteService.getSaved(42)).byDay, isEmpty);
+    }, () => MockClient((_) async => http.Response('{}', 404)));
+    await http.runWithClient(() async {
+      await expectLater(RouteService.getSaved(42), throwsException);
+    }, () => MockClient((_) async => http.Response('{}', 500)));
+  });
+
   test('missing recommendation mobility cannot silently become car', () async {
     await http.runWithClient(() async {
       await expectLater(

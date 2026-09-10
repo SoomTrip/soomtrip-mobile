@@ -1,3 +1,5 @@
+import 'route_service.dart';
+import 'home_logo_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -16,6 +18,45 @@ class DestinationDetailScreen extends StatefulWidget {
 }
 
 class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
+  RoutePlan? _savedPlan;
+  bool _checkingRoute = true;
+  String? _routeCheckError;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkSavedRoute();
+  }
+
+  Future<void> _checkSavedRoute() async {
+    try {
+      final plan = await RouteService.getSaved(widget.destination.id);
+      if (!mounted) return;
+      setState(() {
+        _savedPlan =
+            plan.byDay.values.any((spots) => spots.isNotEmpty) ? plan : null;
+        if (_savedPlan != null) {
+          _selectedPlaces
+            ..clear()
+            ..addAll(plan.byDay.values.expand((spots) => spots).map((spot) =>
+                spot.contentId != null && spot.contentId!.isNotEmpty
+                    ? spot.contentId!
+                    : '${spot.categoryLabel}:${spot.name}'));
+          final lastDay = plan.byDay.keys.reduce((a, b) => a > b ? a : b);
+          _selectedTravelPeriod = _travelPeriods[(lastDay - 1).clamp(0, 2)];
+        }
+        _checkingRoute = false;
+        _routeCheckError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _checkingRoute = false;
+        _routeCheckError = '저장된 경로를 확인하지 못했어요. 다시 시도해주세요.';
+      });
+    }
+  }
+
   final Set<String> _selectedPlaces = {};
   String? _selectedTravelPeriod;
   static const _travelPeriods = ['당일치기', '1박 2일', '2박 3일'];
@@ -46,6 +87,7 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFBF9F4),
       appBar: AppBar(
+        actions: const [HomeLogoButton()],
         title: Text(
           '${widget.destination.regionName} 🌿',
           style: const TextStyle(
@@ -126,32 +168,83 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  onPressed: () {
-                    if (_selectedTravelPeriod == null) {
-                      _showTravelPeriodRequiredDialog();
-                      return;
-                    }
-                    debugPrint('선택된 장소들: $_selectedPlaces');
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => RouteScreen(
-                          mobilityChoice: widget.destination.mobilityChoice,
-                          savedRegionId: widget.destination.id,
-                          travelPeriod: _selectedTravelPeriod!,
-                          selectedSpots: widget.destination.spots
-                              .where((spot) => _selectedPlaces.contains(
-                                  spot.contentId.isNotEmpty
-                                      ? spot.contentId
-                                      : '${spot.categoryLabel}:${spot.name}'))
-                              .toList(growable: false),
-                        ),
-                      ),
-                    );
-                  },
-                  child: const Text(
-                    '이대로 여행 코스 작성하기 ✏️',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  onPressed: _checkingRoute
+                      ? null
+                      : () async {
+                          if (_routeCheckError != null) {
+                            setState(() => _checkingRoute = true);
+                            await _checkSavedRoute();
+                            return;
+                          }
+                          if (_savedPlan != null) {
+                            final result = await Navigator.push<Object>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => RouteScreen(
+                                    initialPlan: _savedPlan,
+                                    mobilityChoice:
+                                        widget.destination.mobilityChoice,
+                                    savedRegionId: widget.destination.id,
+                                    travelPeriod: _selectedTravelPeriod ??
+                                        _travelPeriods[
+                                            (_savedPlan!.byDay.length - 1)
+                                                .clamp(0, 2)],
+                                    selectedSpots: widget.destination.spots,
+                                  ),
+                                ));
+                            if (!mounted) return;
+                            if (result == 'reset') {
+                              setState(() {
+                                final previous = _savedPlan!;
+                                _selectedTravelPeriod = _travelPeriods[
+                                    (previous.byDay.length - 1).clamp(0, 2)];
+                                _selectedPlaces
+                                  ..clear()
+                                  ..addAll(previous.byDay.values
+                                      .expand((spots) => spots)
+                                      .map((spot) =>
+                                          spot.contentId ??
+                                          '${spot.categoryLabel}:${spot.name}'));
+                                _savedPlan = null;
+                              });
+                            }
+                            return;
+                          }
+                          if (_selectedTravelPeriod == null) {
+                            _showTravelPeriodRequiredDialog();
+                            return;
+                          }
+                          debugPrint('선택된 장소들: $_selectedPlaces');
+                          final result = await Navigator.push<Object>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => RouteScreen(
+                                mobilityChoice:
+                                    widget.destination.mobilityChoice,
+                                savedRegionId: widget.destination.id,
+                                travelPeriod: _selectedTravelPeriod!,
+                                selectedSpots: widget.destination.spots
+                                    .where((spot) => _selectedPlaces.contains(spot
+                                            .contentId.isNotEmpty
+                                        ? spot.contentId
+                                        : '${spot.categoryLabel}:${spot.name}'))
+                                    .toList(growable: false),
+                              ),
+                            ),
+                          );
+                          if (!mounted) return;
+                          if (result != 'reset') await _checkSavedRoute();
+                        },
+                  child: Text(
+                    _checkingRoute
+                        ? '경로 확인 중...'
+                        : _routeCheckError != null
+                            ? '경로 확인 다시 시도'
+                            : _savedPlan != null
+                                ? '경로 확인하기'
+                                : '이대로 경로 작성하기',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -207,7 +300,11 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
   Widget _buildTravelPeriodOption(String period) {
     final isSelected = _selectedTravelPeriod == period;
     return GestureDetector(
-      onTap: () => setState(() => _selectedTravelPeriod = period),
+      onTap: () async {
+        if (_selectedTravelPeriod == period) return;
+        if (!await _confirmSelectionChange() || !mounted) return;
+        setState(() => _selectedTravelPeriod = period);
+      },
       child: Container(
         height: 48,
         alignment: Alignment.center,
@@ -267,12 +364,42 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
     );
   }
 
+  bool _confirmingReset = false;
+
+  Future<bool> _confirmSelectionChange() async {
+    if (_checkingRoute || _routeCheckError != null || _confirmingReset)
+      return false;
+    if (_savedPlan == null) return true;
+    _confirmingReset = true;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFFBF9F4),
+        title: const Text('경로를 재설정하시겠습니까?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('아니요', style: TextStyle(color: Colors.grey))),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child:
+                  const Text('예', style: TextStyle(color: Color(0xFF4A7C59)))),
+        ],
+      ),
+    );
+    _confirmingReset = false;
+    if (!mounted || confirmed != true) return false;
+    setState(() => _savedPlan = null);
+    return true;
+  }
+
   Future<void> _toggleSpotSelection(SavedSpot place) async {
     final selectionKey = place.contentId.isNotEmpty
         ? place.contentId
         : '${place.categoryLabel}:${place.name}';
     final isSelected = _selectedPlaces.contains(selectionKey);
     if (isSelected) {
+      if (!await _confirmSelectionChange() || !mounted) return;
       setState(() => _selectedPlaces.remove(selectionKey));
       return;
     }
@@ -305,6 +432,7 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
       return;
     }
 
+    if (!await _confirmSelectionChange() || !mounted) return;
     setState(() => _selectedPlaces.add(selectionKey));
   }
 

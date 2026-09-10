@@ -6,6 +6,38 @@ import 'package:soomtrip/route_service.dart';
 Map<String, dynamic> spot(String id) => {'content_id': id, 'name': id};
 
 void main() {
+  test('saved mobility options preserve distance, duration and server mode', () {
+    final plan = RoutePlan.fromJson({
+      'route_by_day': {
+        'day1': [
+          {...spot('A'), 'saved_region_spot_id': 349,
+            'mobility_options': [{'mobility_choice': 'car',
+              'distance_from_prev_km': null, 'duration_from_prev_minutes': null}]},
+          {...spot('B'), 'saved_region_spot_id': 348,
+            'mobility_options': [{'mobility_choice': 'car',
+              'distance_from_prev_km': 1.9, 'duration_from_prev_minutes': 6}]},
+        ],
+      },
+    });
+    expect(plan.byDay[1]!.first.durationFromPreviousMinutes, isNull);
+    expect(plan.byDay[1]![1].distanceFromPreviousKm, 1.9);
+    expect(plan.byDay[1]![1].durationFromPreviousMinutes, 6);
+    expect(plan.byDay[1]![1].mobilityChoice, 'car');
+    expect(plan.toSaveEntries().last['duration_from_prev_minutes'], 6);
+  });
+
+  test('mobility options select requested walking mode without car default', () {
+    final plan = RoutePlan.fromJson({
+      'route_by_day': {'day1': [spot('A'), {...spot('B'),
+        'mobility_options': [
+          {'mobility_choice': 'car', 'duration_from_prev_minutes': 6},
+          {'mobility_choice': 'walk_transit', 'duration_from_prev_minutes': 25},
+        ]}]},
+    }, mobilityChoice: 'walk_transit');
+    expect(plan.byDay[1]![1].durationFromPreviousMinutes, 25);
+    expect(plan.byDay[1]![1].mobilityChoice, 'walk_transit');
+  });
+
   test('consecutive duplicate anchors disappear without shifting travel times',
       () {
     final plan = RoutePlan.fromJson({

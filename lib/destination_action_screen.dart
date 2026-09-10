@@ -1,3 +1,4 @@
+import 'home_logo_button.dart';
 import 'package:flutter/material.dart';
 import 'destination_detail_screen.dart'; // 기존에 만든 상세(경로) 화면 불러오기
 import 'picture_diary_screen.dart';
@@ -15,6 +16,7 @@ class DestinationActionScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFFBF9F4), // 따뜻한 아이보리 배경
       appBar: AppBar(
+        actions: const [HomeLogoButton()],
         title: Text(
           "$destinationName 🌿", // 선택한 여행지 이름이 상단에 뜹니다
           style: const TextStyle(
