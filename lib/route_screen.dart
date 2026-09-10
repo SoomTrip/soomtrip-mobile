@@ -511,8 +511,11 @@ class _RouteScreenState extends State<RouteScreen> {
                             maxLines: 2,
                             softWrap: true,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 18,
+                            style: TextStyle(
+                              fontSize: _travelTime(_currentSpots[index + 1])
+                                      .contains('택시이동')
+                                  ? 16
+                                  : 18,
                               color: Color(0xFF4A7C59),
                               fontWeight: FontWeight.w600,
                             ),
@@ -588,14 +591,6 @@ class _RouteScreenState extends State<RouteScreen> {
     );
   }
 
-  String _travelTime(RouteSpot spot) {
-    final minutes = spot.durationFromPreviousMinutes;
-    if (minutes == null) return '경로 정보를\n가져올 수 없습니다';
-    final mode = switch (spot.mobilityChoice ?? widget.mobilityChoice) {
-      'walk_transit' => '도보',
-      'car' => '자차',
-      _ => '이동',
-    };
-    return '$mode $minutes분';
-  }
+  String _travelTime(RouteSpot spot) =>
+      spot.travelLabel(fallbackMode: widget.mobilityChoice);
 }

@@ -1,18 +1,120 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'home_logo_button.dart';
 import 'package:flutter/material.dart';
 import 'destination_action_screen.dart'; // 🌟 두 번째 만들 상세 화면을 불러옵니다.
 import 'saved_region_service.dart';
 
 class MyDestinationsScreen extends StatefulWidget {
-  const MyDestinationsScreen({super.key, this.showBackButton = true});
+  const MyDestinationsScreen(
+      {super.key, this.showBackButton = true, this.homeLayout = false});
 
   final bool showBackButton;
+  final bool homeLayout;
 
   @override
   State<MyDestinationsScreen> createState() => _MyDestinationsScreenState();
 }
 
 class _MyDestinationsScreenState extends State<MyDestinationsScreen> {
+  static const _bookmarkKey = 'home_bookmarked_region_ids';
+  Set<int> _bookmarkIds = {};
+  bool _updatingBookmark = false;
+
+  Future<void> _loadBookmark() async {
+    final prefs = await SharedPreferences.getInstance();
+    final ids = prefs.getStringList(_bookmarkKey) ?? const [];
+    if (mounted) {
+      setState(() => _bookmarkIds = ids.map(int.parse).toSet());
+    }
+  }
+
+  Future<void> _toggleBookmark(int id) async {
+    if (_updatingBookmark) return;
+    _updatingBookmark = true;
+    try {
+      final next = Set<int>.from(_bookmarkIds);
+      next.contains(id) ? next.remove(id) : next.add(id);
+      final prefs = await SharedPreferences.getInstance();
+      final saved = await prefs.setStringList(
+          _bookmarkKey, next.map((e) => e.toString()).toList());
+      if (!saved) throw Exception('북마크 저장에 실패했어요.');
+      if (mounted) setState(() => _bookmarkIds = next);
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('북마크 저장에 실패했어요. 다시 시도해주세요.')));
+    } finally {
+      _updatingBookmark = false;
+    }
+  }
+
+  List<SavedRegion> get _homeOrderedDestinations {
+    final bookmarked = <SavedRegion>[];
+    final rest = <SavedRegion>[];
+    for (final destination in destinations) {
+      (_bookmarkIds.contains(destination.id) ? bookmarked : rest)
+          .add(destination);
+    }
+    return [...bookmarked, ...rest];
+  }
+
+  Widget _buildHome() {
+    return Column(children: [
+      const Expanded(
+        child: Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text('숨트립',
+                    style: TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF4A7C59))))),
+      ),
+      Expanded(
+          child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        child: Card(
+            color: const Color(0xFFEEF3EA),
+            elevation: 0,
+            child: SizedBox(
+                width: double.infinity,
+                child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('지금까지',
+                              style: TextStyle(
+                                  fontSize: 22, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          Flexible(
+                              child: Text(
+                                  _isLoading
+                                      ? '여행지를 불러오는 중이에요'
+                                      : _errorMessage != null
+                                          ? '여행지를 불러오지 못했어요'
+                                          : '${destinations.length}개의 여행지를 저장했어요!',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                      fontSize: 23,
+                                      color: Color(0xFF4A7C59)))),
+                        ])))),
+      )),
+      Expanded(
+          flex: 2,
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: Text('저장한 여행지 🗺️',
+                    style:
+                        TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
+            Expanded(child: _buildBody()),
+          ])),
+    ]);
+  }
+
   List<SavedRegion> destinations = [];
   bool _isLoading = true;
   String? _errorMessage;
@@ -21,6 +123,7 @@ class _MyDestinationsScreenState extends State<MyDestinationsScreen> {
   @override
   void initState() {
     super.initState();
+    _loadBookmark();
     final cached = SavedRegionService.cachedRegions;
     if (cached != null) {
       destinations = cached;
@@ -97,6 +200,8 @@ class _MyDestinationsScreenState extends State<MyDestinationsScreen> {
 
     try {
       await SavedRegionService.remove(destination.id);
+      if (_bookmarkIds.contains(destination.id))
+        await _toggleBookmark(destination.id);
       if (!mounted) return;
       setState(() {
         destinations = destinations
@@ -122,23 +227,25 @@ class _MyDestinationsScreenState extends State<MyDestinationsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFBF9F4), // 시안에 맞춘 따뜻한 아이보리 배경
-      appBar: AppBar(
-        actions: const [HomeLogoButton()],
-        automaticallyImplyLeading: widget.showBackButton,
-        title: const Text(
-          "저장한 여행지 🗺️",
-          style: TextStyle(
-              color: Color(0xFF333333),
-              fontWeight: FontWeight.bold,
-              fontSize: 20),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: Color(0xFF333333)),
-      ),
+      appBar: widget.homeLayout
+          ? null
+          : AppBar(
+              actions: const [HomeLogoButton()],
+              automaticallyImplyLeading: widget.showBackButton,
+              title: const Text(
+                "저장한 여행지 🗺️",
+                style: TextStyle(
+                    color: Color(0xFF333333),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20),
+              ),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              centerTitle: true,
+              iconTheme: const IconThemeData(color: Color(0xFF333333)),
+            ),
       body: SafeArea(
-        child: _buildBody(),
+        child: widget.homeLayout ? _buildHome() : _buildBody(),
       ),
     );
   }
@@ -175,15 +282,18 @@ class _MyDestinationsScreenState extends State<MyDestinationsScreen> {
       );
     }
 
-    return RefreshIndicator(
+    return LayoutBuilder(builder: (context, constraints) => RefreshIndicator(
       onRefresh: _loadDestinations,
       child: ListView.builder(
+        itemExtent: widget.homeLayout ? (constraints.maxHeight - 8) / 6 : null,
         physics: const BouncingScrollPhysics(), // 🌟 스크롤할 때 고무줄처럼 부드럽게 튕기는 효과
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        itemCount: destinations.length,
+        padding: EdgeInsets.symmetric(horizontal: widget.homeLayout ? 12 : 20, vertical: widget.homeLayout ? 4 : 12),
+        itemCount: widget.homeLayout ? _homeOrderedDestinations.length : destinations.length,
         itemBuilder: (context, index) {
-          final destination = destinations[index];
-          return GestureDetector(
+          final destination = widget.homeLayout
+              ? _homeOrderedDestinations[index]
+              : destinations[index];
+          final card = GestureDetector(
             onTap: () {
               // 오른쪽 상세 화면으로 이동
               Navigator.push(
@@ -196,8 +306,8 @@ class _MyDestinationsScreenState extends State<MyDestinationsScreen> {
               );
             },
             child: Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              margin: EdgeInsets.only(bottom: widget.homeLayout ? 4 : 16),
+              padding: EdgeInsets.symmetric(horizontal: widget.homeLayout ? 10 : 20, vertical: widget.homeLayout ? 0 : 18),
               decoration: BoxDecoration(
                 color: const Color(0xFFFAF9F5),
                 borderRadius: BorderRadius.circular(24), // 🌟 마이페이지처럼 둥글둥글하게!
@@ -207,28 +317,16 @@ class _MyDestinationsScreenState extends State<MyDestinationsScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      // 📍 여행지 이름 옆에 들어가는 귀여운 초록색 마커 포인트
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEEF3EA), // 연두색 배경
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(Icons.location_on_rounded,
-                            color: Color(0xFF4A7C59), size: 22),
-                      ),
-                      const SizedBox(width: 16),
-                      Text(
-                        destination.regionName,
-                        style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF333333)),
-                      ),
-                    ],
-                  ),
+                  if (!widget.homeLayout)
+                    const Icon(Icons.location_on_rounded, color: Color(0xFF4A7C59)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: Text(destination.regionName,
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF333333)))),
                   // ❌ 삭제 버튼 (너무 튀지 않게 연한 회색으로 변경)
                   GestureDetector(
                     onTap: () => _showDeleteDialog(destination),
@@ -248,8 +346,127 @@ class _MyDestinationsScreenState extends State<MyDestinationsScreen> {
               ),
             ),
           );
+          if (!widget.homeLayout) return card;
+          return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            destination.isShared
+                ? _ShareBubbleIcon(
+                    label: destination.sharedFrom?.nickname ?? '나')
+                : IconButton(
+                    tooltip: _bookmarkIds.contains(destination.id) ? '북마크 해제' : '북마크',
+                    onPressed: () => _toggleBookmark(destination.id),
+                    icon: Icon(
+                        _bookmarkIds.contains(destination.id)
+                            ? Icons.bookmark
+                            : Icons.bookmark_border,
+                        color: const Color(0xFF4A7C59))),
+            Expanded(child: card),
+          ]);
         },
+      ),
+    ));
+  }
+}
+
+class _ShareBubbleIcon extends StatefulWidget {
+  const _ShareBubbleIcon({required this.label});
+  final String label;
+
+  @override
+  State<_ShareBubbleIcon> createState() => _ShareBubbleIconState();
+}
+
+class _ShareBubbleIconState extends State<_ShareBubbleIcon> {
+  final _link = LayerLink();
+  OverlayEntry? _entry;
+
+  void _toggleBubble() {
+    if (_entry != null) {
+      _hideBubble();
+      return;
+    }
+    final entry = OverlayEntry(
+      builder: (context) => Positioned(
+        width: 120,
+        child: CompositedTransformFollower(
+          link: _link,
+          showWhenUnlinked: false,
+          targetAnchor: Alignment.topCenter,
+          followerAnchor: Alignment.bottomCenter,
+          offset: const Offset(0, -6),
+          child: _ShareBubble(text: widget.label),
+        ),
+      ),
+    );
+    _entry = entry;
+    Overlay.of(context).insert(entry);
+    Future.delayed(const Duration(seconds: 2), _hideBubble);
+  }
+
+  void _hideBubble() {
+    _entry?.remove();
+    _entry = null;
+  }
+
+  @override
+  void dispose() {
+    _entry?.remove();
+    _entry = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _link,
+      child: IconButton(
+        tooltip: widget.label,
+        onPressed: _toggleBubble,
+        icon: const Icon(Icons.person_rounded, color: Color(0xFF4A7C59)),
       ),
     );
   }
+}
+
+class _ShareBubble extends StatelessWidget {
+  const _ShareBubble({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+              color: const Color(0xFF4A7C59),
+              borderRadius: BorderRadius.circular(10)),
+          child: Text(text,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold)),
+        ),
+        CustomPaint(
+            size: const Size(12, 6), painter: _BubbleTrianglePainter()),
+      ]),
+    );
+  }
+}
+
+class _BubbleTrianglePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = const Color(0xFF4A7C59);
+    final path = Path()
+      ..moveTo(size.width / 2, size.height)
+      ..lineTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

@@ -9,8 +9,9 @@ import 'saved_region_service.dart';
 
 class DestinationDetailScreen extends StatefulWidget {
   final SavedRegion destination;
+  final bool resetRoute;
 
-  const DestinationDetailScreen({super.key, required this.destination});
+  const DestinationDetailScreen({super.key, required this.destination, this.resetRoute = false});
 
   @override
   State<DestinationDetailScreen> createState() =>
@@ -25,7 +26,11 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _checkSavedRoute();
+    if (widget.resetRoute) {
+      _checkingRoute = false;
+    } else {
+      _checkSavedRoute();
+    }
   }
 
   Future<void> _checkSavedRoute() async {
