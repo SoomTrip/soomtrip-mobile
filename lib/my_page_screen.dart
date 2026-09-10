@@ -32,6 +32,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
   ];
 
   bool _isLoggingOut = false;
+  bool _isDeletingAccount = false;
   String? _userCode;
   String? _nickname;
   String? _profileImageUrl;
@@ -432,7 +433,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
   }
 
   Future<void> _showLogoutDialog() async {
-    if (_isLoggingOut) return;
+    if (_isLoggingOut || _isDeletingAccount) return;
 
     final shouldLogout = await showDialog<bool>(
       context: context,
@@ -461,7 +462,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
   }
 
   Future<void> _logout() async {
-    if (_isLoggingOut) return;
+    if (_isLoggingOut || _isDeletingAccount) return;
     setState(() => _isLoggingOut = true);
 
     try {
@@ -484,6 +485,67 @@ class _MyPageScreenState extends State<MyPageScreen> {
       setState(() => _isLoggingOut = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('로그아웃에 실패했습니다. 다시 시도해 주세요.')),
+      );
+    }
+  }
+
+  Future<void> _showDeleteAccountDialog() async {
+    if (_isLoggingOut || _isDeletingAccount) return;
+
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('회원 탈퇴'),
+        content: const Text(
+          '정말 탈퇴하시겠습니까?\n\n'
+          '탈퇴하면 모든 데이터가 영구적으로 삭제되며 복구할 수 없어요. 😢',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              '탈퇴하기',
+              style: TextStyle(color: Color(0xFFE57373)),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete == true && mounted) {
+      await _deleteAccount();
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    if (_isLoggingOut || _isDeletingAccount) return;
+    setState(() => _isDeletingAccount = true);
+
+    try {
+      try {
+        // 로그아웃과 달리 탈퇴는 카카오 계정 연결 자체를 끊어야 함
+        await UserApi.instance.unlink();
+      } catch (error) {
+        debugPrint('[Delete Account] Kakao unlink failed: $error');
+      }
+
+      await AuthService.deleteAccount();
+
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const SplashScreen()),
+        (route) => false,
+      );
+    } catch (error) {
+      debugPrint('[Delete Account] SoomTrip account deletion failed: $error');
+      if (!mounted) return;
+      setState(() => _isDeletingAccount = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('회원 탈퇴에 실패했습니다. 다시 시도해 주세요.')),
       );
     }
   }
@@ -550,6 +612,10 @@ class _MyPageScreenState extends State<MyPageScreen> {
 
             // 6. 로그아웃 버튼
             _buildLogoutButton(),
+            const SizedBox(height: 12),
+
+            // 7. 회원 탈퇴 버튼
+            _buildDeleteAccountButton(),
             const SizedBox(height: 40),
           ],
         ),
@@ -826,7 +892,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
   // ==========================================
   Widget _buildLogoutButton() {
     return GestureDetector(
-      onTap: _isLoggingOut ? null : _showLogoutDialog,
+      onTap: (_isLoggingOut || _isDeletingAccount) ? null : _showLogoutDialog,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
@@ -848,6 +914,49 @@ class _MyPageScreenState extends State<MyPageScreen> {
               ],
             ),
             if (_isLoggingOut)
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==========================================
+  // 7. 회원 탈퇴 버튼
+  // ==========================================
+  Widget _buildDeleteAccountButton() {
+    return GestureDetector(
+      onTap: (_isLoggingOut || _isDeletingAccount)
+          ? null
+          : _showDeleteAccountDialog,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFEBEE), // 로그아웃보다 살짝 진한 연붉은색 배경
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.person_remove_alt_1_rounded,
+                    color: Color(0xFFD32F2F)),
+                SizedBox(width: 12),
+                Text("회원 탈퇴",
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF333333))),
+              ],
+            ),
+            if (_isDeletingAccount)
               const SizedBox(
                 width: 20,
                 height: 20,

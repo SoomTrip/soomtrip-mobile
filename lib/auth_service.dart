@@ -111,6 +111,31 @@ class AuthService {
     await preferences.remove(_refreshKey);
   }
 
+  // 회원 탈퇴: 서버가 저장한 여행지/일기/스탬프/친구/리프레시 토큰까지 전부
+  // 삭제하므로, 여기서는 로컬 세션만 정리하면 된다.
+  static Future<void> deleteAccount() async {
+    final jwt = await getJwt();
+    if (jwt == null || jwt.isEmpty) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    final response = await client
+        .delete(
+          Uri.parse(_meUrl),
+          headers: {'Authorization': 'Bearer $jwt'},
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('회원 탈퇴 실패 (${response.statusCode})');
+    }
+
+    final preferences = await SharedPreferences.getInstance();
+    _sessionVersion++;
+    await preferences.remove(_jwtKey);
+    await preferences.remove(_refreshKey);
+  }
+
   static Future<String?> _refreshAfterUnauthorized(
       String? rejectedToken) async {
     final current = await getJwt();
