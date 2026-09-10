@@ -8,7 +8,7 @@ import 'package:soomtrip/auth_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final url = Uri.parse('https://soomtrip-api.cspc.me/users/me');
+  final url = Uri.parse('https://soomtrip.cspc.me/users/me');
   setUp(() => SharedPreferences.setMockInitialValues({
         'soomtrip_access_token': 'old',
         'soomtrip_refresh_token': 'refresh',
