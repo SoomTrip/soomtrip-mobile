@@ -59,7 +59,7 @@ class FriendRelation {
 }
 
 class FriendService {
-  static const _baseUrl = 'https://soomtrip-api.cspc.me';
+  static const _baseUrl = 'https://soomtrip.cspc.me';
 
   static Future<Map<String, String>> _headers({bool json = false}) async {
     final jwt = await AuthService.getJwt();

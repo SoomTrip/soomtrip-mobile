@@ -91,7 +91,7 @@ class SavedRegion {
 }
 
 class SavedRegionService {
-  static const _savedRegionsUrl = 'https://soomtrip-api.cspc.me/saved-regions';
+  static const _savedRegionsUrl = 'https://soomtrip.cspc.me/saved-regions';
   static List<SavedRegion>? _cachedRegions;
 
   static List<SavedRegion>? get cachedRegions {
@@ -289,7 +289,7 @@ extension StampService on SavedRegionService {
     if (jwt == null || jwt.isEmpty) throw Exception('로그인이 필요합니다.');
 
     final response = await AuthService.client.get(
-      Uri.parse('https://soomtrip-api.cspc.me/stamps'),
+      Uri.parse('https://soomtrip.cspc.me/stamps'),
       headers: {'Authorization': 'Bearer $jwt'},
     ).timeout(const Duration(seconds: 15));
 

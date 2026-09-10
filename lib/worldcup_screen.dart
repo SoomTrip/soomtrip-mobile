@@ -451,6 +451,9 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
                             ? Icons.toggle_on_rounded
                             : Icons.toggle_off_rounded,
                         size: 22,
+                        color: _showBackgroundEffect
+                            ? const Color(0xFF4A7C59)
+                            : Colors.white,
                       ),
                       label:
                           Text('배경 효과 ${_showBackgroundEffect ? "ON" : "OFF"}'),

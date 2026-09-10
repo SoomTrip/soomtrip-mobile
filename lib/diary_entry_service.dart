@@ -48,7 +48,7 @@ class DiaryEntry {
 }
 
 class DiaryEntryService {
-  static const _baseUrl = 'https://soomtrip-api.cspc.me';
+  static const _baseUrl = 'https://soomtrip.cspc.me';
   static final ValueNotifier<int> entriesChanged = ValueNotifier<int>(0);
 
   static Future<String> _jwt() async {

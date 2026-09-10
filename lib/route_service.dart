@@ -193,7 +193,7 @@ class RoutePlan {
 }
 
 class RouteService {
-  static const _baseUrl = 'https://soomtrip-api.cspc.me';
+  static const _baseUrl = 'https://soomtrip.cspc.me';
 
   static void _logTravelValues(String stage, RoutePlan plan) {
     if (!kDebugMode) return;
