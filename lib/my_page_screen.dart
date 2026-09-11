@@ -100,8 +100,8 @@ class _MyPageScreenState extends State<MyPageScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('받은 공유 여행지 ${_pendingReceivedShares.length}개',
-                  style:
-                      const TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
+                  style: const TextStyle(
+                      fontSize: 19, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
               if (_pendingReceivedShares.isEmpty)
                 const Padding(
@@ -380,7 +380,8 @@ class _MyPageScreenState extends State<MyPageScreen> {
                                     final nickname =
                                         nicknameController.text.trim();
                                     if (nickname != _nickname) {
-                                      await AuthService.updateNickname(nickname);
+                                      await AuthService.updateNickname(
+                                          nickname);
                                     }
                                     final preferences =
                                         await SharedPreferences.getInstance();
@@ -830,62 +831,25 @@ class _MyPageScreenState extends State<MyPageScreen> {
   // ==========================================
   // 5. 나의 여행 기록 카드
   // ==========================================
-  Widget _buildTravelRecordsCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFAF9F5),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFEBE6D9), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.book_outlined, color: Color(0xFF6B4E31)),
-              SizedBox(width: 8),
-              Text("나의 여행 기록",
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF333333))),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildRecordItem(Icons.location_on_outlined, "방문한 여행지", "12곳",
-                  const Color(0xFF4A7C59)),
-              _buildRecordItem(
-                  Icons.inventory_2_outlined, "타임캡슐", "8개", Colors.blue),
-              _buildRecordItem(
-                  Icons.approval_outlined, "스탬프", "15개", Colors.orange),
-              const Icon(Icons.chevron_right_rounded, color: Colors.grey),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecordItem(
-      IconData icon, String title, String count, Color iconColor) {
-    return Column(
-      children: [
-        Icon(icon, color: iconColor, size: 28),
-        const SizedBox(height: 8),
-        Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-        const SizedBox(height: 4),
-        Text(count,
-            style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF333333))),
-      ],
-    );
-  }
+  Widget _buildTravelRecordsCard() => Container(
+        decoration: BoxDecoration(
+            color: const Color(0xFFFAF9F5),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFFEBE6D9), width: 1.5)),
+        child: ListTile(
+          contentPadding: const EdgeInsets.all(20),
+          leading:
+              const Icon(Icons.people_alt_rounded, color: Color(0xFF4A7C59)),
+          title: const Text('공유된 여행지',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) =>
+                      const MyDestinationsScreen(sharedOnly: true))),
+        ),
+      );
 
   // ==========================================
   // 6. 로그아웃 버튼

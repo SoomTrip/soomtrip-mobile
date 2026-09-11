@@ -6,19 +6,49 @@ import 'package:soomtrip/route_service.dart';
 Map<String, dynamic> spot(String id) => {'content_id': id, 'name': id};
 
 void main() {
+  test('unconfirmed mode on a freshly optimized spot shows a neutral label',
+      () {
+    // A brand-new /route/optimize response has no per-spot mobility_choice
+    // yet (that only gets echoed back after a save). The label must not
+    // guess a specific mode from a client-side hint in that case, since a
+    // wrong guess (e.g. showing "도보이동" for a route the server priced at
+    // car speeds) misleads the traveler.
+    final plan = RoutePlan.fromJson({
+      'route_by_day': {
+        'day1': {
+          'spots': [
+            spot('A'),
+            {
+              ...spot('B'),
+              'distance_from_prev_km': 3.3,
+              'duration_from_prev_minutes': 6,
+              'car_alternative': null,
+            },
+          ]
+        }
+      }
+    });
+    expect(plan.byDay[1]![1].mobilityChoice, isNull);
+    expect(plan.byDay[1]![1].travelLabel(), '이동 6분');
+  });
+
   test('car alternative is sent to save and survives grouped reload', () {
     final plan = RoutePlan.fromJson({'route_by_day': {'day1': {'spots': [
       {...spot('A'), 'saved_region_spot_id': 1},
       {...spot('B'), 'saved_region_spot_id': 2,
         'distance_from_prev_km': 2.1, 'duration_from_prev_minutes': 30,
+        'mobility_used': 'walk_transit', 'is_fallback': false,
         'car_alternative': {'mobility_choice': 'car',
           'distance_from_prev_km': 3.2, 'duration_from_prev_minutes': 7}},
     ]}}});
     final entries = plan.toSaveEntries();
-    expect(entries.first.containsKey('car_alternative'), false);
+    expect(entries.first['car_alternative'], isNull);
+    expect(entries.first['mobility_used'], isNull);
     expect(entries.last['duration_from_prev_minutes'], 30);
+    expect(entries.last['mobility_used'], 'walk_transit');
+    expect(entries.last['is_fallback'], false);
     expect(entries.last['car_alternative'], {'mobility_choice': 'car',
-      'distance_from_prev_km': 3.2, 'duration_from_prev_minutes': 7});
+      'distance_from_prev_km': 3.2, 'duration_from_prev_minutes': 7, 'is_fallback': false});
     final reloaded = RoutePlan.fromJson({'route_by_day': {'day1': [
       {...spot('A'), 'saved_region_spot_id': 1},
       {...spot('B'), 'saved_region_spot_id': 2, 'mobility_options': [
@@ -27,7 +57,7 @@ void main() {
           'duration_from_prev_minutes': 30},
       ]},
     ]}});
-    expect(reloaded.byDay[1]![1].travelLabel(), '도보이동 30분\n택시이동 7분');
+    expect(reloaded.byDay[1]![1].travelLabel(), '도보 30분\n택시 7분');
     expect(reloaded.toSaveEntries(), entries);
   });
 
@@ -38,7 +68,7 @@ void main() {
         {'mobility_choice': 'car', 'duration_from_prev_minutes': 6},
       ],
     }]}});
-    expect(plan.byDay[1]![1].travelLabel(), '도보이동 25분\n택시이동 6분');
+    expect(plan.byDay[1]![1].travelLabel(), '도보 25분\n택시 6분');
   });
 
   test('two entries for one arrival preserve both transport times', () {
@@ -47,7 +77,7 @@ void main() {
       {...spot('B'), 'saved_region_spot_id': 2, 'mobility_choice': 'walk_transit', 'duration_from_prev_minutes': 25},
     ]}});
     expect(plan.byDay[1]!.length, 2);
-    expect(plan.byDay[1]![1].travelLabel(), '도보이동 25분\n택시이동 6분');
+    expect(plan.byDay[1]![1].travelLabel(), '도보 25분\n택시 6분');
   });
 
   test('optimize car alternative survives saved ID mapping', () {
@@ -55,7 +85,54 @@ void main() {
       ...spot('B'), 'duration_from_prev_minutes': 30,
       'car_alternative': {'duration_minutes': 0, 'distance_km': 0.1},
     }]}}});
-    expect(plan.byDay[1]![1].withSavedRegionSpotId(2).travelLabel(), '도보이동 30분\n택시이동 0분');
+    expect(plan.byDay[1]![1].withSavedRegionSpotId(2).travelLabel(), '도보 30분\n택시 0분');
+  });
+
+  test('mobility_used normalizes into the legacy mobility_choice field', () {
+    final plan = RoutePlan.fromJson({'route_by_day': {'day1': {'spots': [spot('A'), {
+      ...spot('B'), 'distance_from_prev_km': 1.2, 'duration_from_prev_minutes': 14,
+      'mobility_used': 'walk_transit', 'is_fallback': false, 'car_alternative': null,
+    }]}}});
+    expect(plan.byDay[1]![1].mobilityChoice, 'walk_transit');
+    expect(plan.byDay[1]![1].travelLabel(), '도보 14분');
+  });
+
+  test('fallback_car shows the no-walk-route label using its own duration', () {
+    final plan = RoutePlan.fromJson({'route_by_day': {'day1': {'spots': [spot('A'), {
+      ...spot('B'), 'distance_from_prev_km': 5.4, 'duration_from_prev_minutes': 9,
+      'mobility_used': 'fallback_car', 'is_fallback': true, 'car_alternative': null,
+    }]}}});
+    expect(plan.byDay[1]![1].travelLabel(), '택시 9분');
+  });
+
+  test('walk with a 25+ minute car alternative shows both legs in one line', () {
+    final plan = RoutePlan.fromJson({'route_by_day': {'day1': {'spots': [spot('A'), {
+      ...spot('B'), 'distance_from_prev_km': 2.1, 'duration_from_prev_minutes': 28,
+      'mobility_used': 'walk_transit', 'is_fallback': false,
+      'car_alternative': {'mobility_choice': 'car',
+        'distance_from_prev_km': 5.4, 'duration_from_prev_minutes': 9, 'is_fallback': false},
+    }]}}});
+    expect(plan.byDay[1]![1].travelLabel(), '도보 28분\n택시 9분');
+  });
+
+  test('plain car mode (region-level car preference) shows a self-drive label', () {
+    final plan = RoutePlan.fromJson({'route_by_day': {'day1': {'spots': [spot('A'), {
+      ...spot('B'), 'distance_from_prev_km': 4.0, 'duration_from_prev_minutes': 10,
+      'mobility_used': 'car', 'is_fallback': false, 'car_alternative': null,
+    }]}}});
+    expect(plan.byDay[1]![1].travelLabel(), '자차 10분');
+  });
+
+  test('fallback_car saved entry reports is_fallback true', () {
+    final plan = RoutePlan.fromJson({'route_by_day': {'day1': {'spots': [
+      {...spot('A'), 'saved_region_spot_id': 1},
+      {...spot('B'), 'saved_region_spot_id': 2, 'distance_from_prev_km': 5.4,
+        'duration_from_prev_minutes': 9, 'mobility_used': 'fallback_car'},
+    ]}}});
+    final entries = plan.toSaveEntries();
+    expect(entries.last['mobility_used'], 'fallback_car');
+    expect(entries.last['is_fallback'], true);
+    expect(entries.last['car_alternative'], isNull);
   });
 
   test('saved mobility options preserve distance, duration and server mode', () {

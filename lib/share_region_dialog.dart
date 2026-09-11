@@ -30,7 +30,8 @@ class _ShareRegionDialogState extends State<ShareRegionDialog> {
       title: Text('${widget.friend.nickname} 님에게 여행지를 공유하시겠습니까?'),
       content: Text(region.regionName),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('아니요')),
+        TextButton(onPressed: () => Navigator.pop(context, false),
+          child: const Text('아니요', style: TextStyle(color: Colors.grey))),
         TextButton(onPressed: () => Navigator.pop(context, true),
           child: const Text('예', style: TextStyle(color: Color(0xFF4A7C59)))),
       ],
@@ -57,7 +58,7 @@ class _ShareRegionDialogState extends State<ShareRegionDialog> {
     canPop: !_busy,
     child: AlertDialog(
       backgroundColor: const Color(0xFFFBF9F4),
-      title: const Text('저장한 여행지'),
+      title: const Text('공유할 여행지'),
       content: SizedBox(width: double.maxFinite,
         height: MediaQuery.sizeOf(context).height * .45,
         child: Column(children: [

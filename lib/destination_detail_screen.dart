@@ -187,8 +187,6 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
                                 MaterialPageRoute(
                                   builder: (_) => RouteScreen(
                                     initialPlan: _savedPlan,
-                                    mobilityChoice:
-                                        widget.destination.mobilityChoice,
                                     savedRegionId: widget.destination.id,
                                     travelPeriod: _selectedTravelPeriod ??
                                         _travelPeriods[
@@ -224,8 +222,6 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (context) => RouteScreen(
-                                mobilityChoice:
-                                    widget.destination.mobilityChoice,
                                 savedRegionId: widget.destination.id,
                                 travelPeriod: _selectedTravelPeriod!,
                                 selectedSpots: widget.destination.spots
