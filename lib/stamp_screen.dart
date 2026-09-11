@@ -78,7 +78,7 @@ class _StampScreenState extends State<StampScreen> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = error.toString().replaceFirst('Exception: ', '');
+        _errorMessage = '도장 불러오기 실패';
         _isLoading = false;
       });
     }

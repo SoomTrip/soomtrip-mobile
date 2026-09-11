@@ -98,7 +98,7 @@ class _RouteScreenState extends State<RouteScreen> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _errorMessage = error.toString().replaceFirst('Exception: ', '');
+        _errorMessage = '여행 경로 불러오기 실패';
       });
     }
   }

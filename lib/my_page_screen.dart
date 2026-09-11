@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:soomtrip/my_destination_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'auth_service.dart';
 import 'friend_service.dart';
@@ -23,6 +24,7 @@ class MyPageScreen extends StatefulWidget {
 class _MyPageScreenState extends State<MyPageScreen> {
   static const _profileAssetKey = 'my_page_profile_asset';
   static const _profileBytesKey = 'my_page_profile_bytes';
+  static const _notificationsEnabledKey = 'my_page_notifications_enabled';
   static const _defaultProfileAssets = [
     'assets/images/profile1.jpeg',
     'assets/images/profile2.jpeg',
@@ -33,6 +35,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
 
   bool _isLoggingOut = false;
   bool _isDeletingAccount = false;
+  bool _notificationsEnabled = true;
   String? _userCode;
   String? _nickname;
   String? _profileImageUrl;
@@ -48,6 +51,14 @@ class _MyPageScreenState extends State<MyPageScreen> {
     _loadUserProfile();
     _loadSavedDestinationCount();
     _loadReceivedShares();
+    _loadNotificationSetting();
+  }
+
+  Future<void> _loadNotificationSetting() async {
+    final preferences = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() => _notificationsEnabled =
+        preferences.getBool(_notificationsEnabledKey) ?? true);
   }
 
   Future<void> _loadReceivedShares() async {
@@ -81,8 +92,8 @@ class _MyPageScreenState extends State<MyPageScreen> {
               : '${request.regionName} 공유를 거절했어요.')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(error.toString().replaceFirst('Exception: ', ''))));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('여행지 공유 응답 실패')));
     }
   }
 
@@ -584,7 +595,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined, color: Color(0xFF6B4E31)),
-            onPressed: () {},
+            onPressed: _showSettingsSheet,
           ),
           const SizedBox(width: 8),
         ],
@@ -931,6 +942,140 @@ class _MyPageScreenState extends State<MyPageScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  // ==========================================
+  // 8. 설정바 (우측 상단 톱니바퀴)
+  // ==========================================
+  void _showSettingsSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: const Color(0xFFFBF9F4),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('설정',
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              _buildNotificationToggleRow(),
+              const Divider(height: 28),
+              _buildSettingsRow(
+                icon: Icons.privacy_tip_outlined,
+                iconColor: const Color(0xFF6B4E31),
+                label: '개인정보처리방침',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _openPrivacyPolicy();
+                },
+              ),
+              const SizedBox(height: 4),
+              _buildSettingsRow(
+                icon: Icons.logout_rounded,
+                iconColor: const Color(0xFFE57373),
+                label: '로그아웃',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _showLogoutDialog();
+                },
+              ),
+              const SizedBox(height: 4),
+              _buildSettingsRow(
+                icon: Icons.person_remove_alt_1_rounded,
+                iconColor: const Color(0xFFD32F2F),
+                label: '회원 탈퇴',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _showDeleteAccountDialog();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationToggleRow() {
+    return StatefulBuilder(
+      builder: (context, setSheetState) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.notifications_none_rounded, color: Color(0xFF6B4E31)),
+              SizedBox(width: 12),
+              Text('알림 받기',
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF333333))),
+            ],
+          ),
+          Switch(
+            value: _notificationsEnabled,
+            activeThumbColor: const Color(0xFF4A7C59),
+            onChanged: (value) async {
+              setSheetState(() => _notificationsEnabled = value);
+              final preferences = await SharedPreferences.getInstance();
+              await preferences.setBool(_notificationsEnabledKey, value);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsRow({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: iconColor),
+                const SizedBox(width: 12),
+                Text(label,
+                    style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF333333))),
+              ],
+            ),
+            const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openPrivacyPolicy() async {
+    final uri = Uri.parse('https://soomtrip.cspc.me/privacy');
+    try {
+      if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+    } catch (_) {
+      // Show the same retry guidance when the platform cannot open the link.
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('개인정보처리방침 페이지를 열지 못했어요. 잠시 후 다시 시도해주세요.')),
     );
   }
 }

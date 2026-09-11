@@ -78,8 +78,7 @@ mixin SavedDestinationsController<T extends StatefulWidget> on State<T> {
     } catch (error) {
       if (!mounted) return;
       if (destinations.isEmpty) {
-        setState(() =>
-            destinationsError = error.toString().replaceFirst('Exception: ', ''));
+        setState(() => destinationsError = '여행지 불러오기 실패');
       }
     } finally {
       if (mounted && showLoading) setState(() => isLoadingDestinations = false);
@@ -132,8 +131,8 @@ mixin SavedDestinationsController<T extends StatefulWidget> on State<T> {
           .showSnackBar(const SnackBar(content: Text('저장한 여행지를 삭제했어요.')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('여행지 삭제 실패')));
     } finally {
       if (mounted) setState(() => deletingIds.remove(destination.id));
     }

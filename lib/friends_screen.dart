@@ -48,8 +48,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       });
     } catch (error) {
       if (mounted) {
-        setState(() =>
-            _errorMessage = error.toString().replaceFirst('Exception: ', ''));
+        setState(() => _errorMessage = '친구 목록 불러오기 실패');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -128,7 +127,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       }
     } catch (error) {
       if (mounted) {
-        _showMessage(error.toString().replaceFirst('Exception: ', ''));
+        _showMessage('친구 요청 수락 실패');
       }
     }
   }
@@ -160,7 +159,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
       }
     } catch (error) {
       if (mounted) {
-        _showMessage(error.toString().replaceFirst('Exception: ', ''));
+        _showMessage('친구 삭제 실패');
       }
     }
   }
