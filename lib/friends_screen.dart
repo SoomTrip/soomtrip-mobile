@@ -61,18 +61,53 @@ class _FriendsScreenState extends State<FriendsScreen> {
     if (code.isEmpty || _isSending) return;
     setState(() => _isSending = true);
     try {
-      await FriendService.requestFriend(code);
+      final receiver = await FriendService.requestFriend(code);
       if (!mounted) return;
       _codeController.clear();
       FocusScope.of(context).unfocus();
-      _showMessage('친구 요청을 보냈어요.');
+      await _showFriendPopup(
+        title: '친구 요청 완료',
+        message: '${receiver.nickname}님에게 친구 요청을 보냈어요.',
+      );
     } catch (error) {
       if (mounted) {
-        _showMessage(error.toString().replaceFirst('Exception: ', ''));
+        _codeController.clear();
+        FocusScope.of(context).unfocus();
+        await _showFriendPopup(
+          title: '친구 요청 실패',
+          message: _friendlyErrorMessage(error),
+        );
       }
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
+  }
+
+  // '친구 요청 실패 (409): 이미 친구 요청 또는 친구 관계가 존재합니다.' 같은 메시지에서
+  // 상태코드 같은 기술적인 부분은 빼고 서버가 준 안내 문구만 보여준다.
+  String _friendlyErrorMessage(Object error) {
+    final raw = error.toString().replaceFirst('Exception: ', '');
+    final match = RegExp(r'\(\d+\):\s*(.+)$').firstMatch(raw);
+    return match?.group(1) ?? raw;
+  }
+
+  Future<void> _showFriendPopup(
+      {required String title, required String message}) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFFBF9F4),
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('확인',
+                  style: TextStyle(
+                      color: Color(0xFF4A7C59), fontWeight: FontWeight.bold))),
+        ],
+      ),
+    );
   }
 
   Future<void> _handleRequest(FriendRelation request, bool accept) async {
@@ -82,8 +117,14 @@ class _FriendsScreenState extends State<FriendsScreen> {
           ? await FriendService.accept(request.id)
           : await FriendService.reject(request.id);
       await _loadData();
-      if (mounted) {
-        _showMessage(accept ? '친구 요청을 수락했어요.' : '친구 요청을 거절했어요.');
+      if (!mounted) return;
+      if (accept) {
+        _showMessage('친구 요청을 수락했어요.');
+      } else {
+        await _showFriendPopup(
+          title: '친구 요청 거절',
+          message: '${_friendUser(request).nickname}님의 친구 요청을 거절했어요.',
+        );
       }
     } catch (error) {
       if (mounted) {

@@ -83,13 +83,18 @@ class FriendService {
   static Future<List<FriendRelation>> getRequests() =>
       _getRelations('/friends/requests', '친구 요청 불러오기');
 
-  static Future<void> requestFriend(String userCode) async {
+  static Future<FriendUser> requestFriend(String userCode) async {
     final response = await AuthService.client
         .post(Uri.parse('$_baseUrl/friends/request'),
             headers: await _headers(json: true),
             body: jsonEncode({'user_code': userCode}))
         .timeout(const Duration(seconds: 15));
     _ensureSuccess(response, '친구 요청');
+    final receiver = _decodeMap(response)['receiver'];
+    if (receiver is! Map<String, dynamic>) {
+      throw const FormatException('친구 요청 응답 형식이 올바르지 않습니다.');
+    }
+    return FriendUser.fromJson(receiver);
   }
 
   static Future<void> accept(int id) =>
