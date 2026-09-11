@@ -224,11 +224,7 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
       _savedPreferenceId = null;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              error.toString().replaceFirst('Exception: ', ''),
-            ),
-          ),
+          const SnackBar(content: Text('취향 저장 실패')),
         );
       }
     } finally {

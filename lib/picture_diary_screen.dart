@@ -88,8 +88,7 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(error.toString().replaceFirst('Exception: ', ''))),
+          const SnackBar(content: Text('그림일기 불러오기 실패')),
         );
       });
     } finally {
@@ -175,8 +174,7 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
       if (!mounted) return;
       setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(error.toString().replaceFirst('Exception: ', ''))),
+        const SnackBar(content: Text('그림일기 저장 실패')),
       );
     }
   }

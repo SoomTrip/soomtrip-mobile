@@ -130,10 +130,8 @@ class _GachaScreenState extends State<GachaScreen>
       _statusTimer?.cancel();
       _shakeController.stop();
       setState(() => _isSpinning = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-            error.toString().replaceFirst('Exception: ', '')),
-      ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('여행지 추천 실패')),
       );
       return;
     }
