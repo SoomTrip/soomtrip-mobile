@@ -47,7 +47,9 @@ class RouteSpot {
     final alternative = json['car_alternative'];
     if (alternative is Map) {
       options.add({
-        'mobility_choice': 'car',
+        'mobility_choice': alternative['mobility_choice'] is String
+            ? alternative['mobility_choice']
+            : 'car',
         'duration_from_prev_minutes': alternative['duration_from_prev_minutes'] ?? alternative['duration_minutes'],
         'distance_from_prev_km': alternative['distance_from_prev_km'] ?? alternative['distance_km'],
       });
@@ -85,7 +87,7 @@ class RouteSpot {
     ...mobilityOptions,
   ];
 
-  String travelLabel({String? fallbackMode}) {
+  String travelLabel() {
     int? minutesFor(String mode) {
       for (final option in travelOptions) {
         if (option['mobility_choice'] != mode) continue;
@@ -95,15 +97,27 @@ class RouteSpot {
       }
       return null;
     }
-    final walk = minutesFor('walk_transit');
-    final car = minutesFor('car');
-    if (walk != null && car != null) return '도보이동 $walk분\n택시이동 $car분';
     final minutes = durationFromPreviousMinutes;
     if (minutes == null) return '경로 정보를\n가져올 수 없습니다';
-    final mode = switch (mobilityChoice ?? fallbackMode) {
-      'walk_transit' => '도보이동', 'car' => '자차이동', _ => '이동',
+    // fallback_car means no walk route existed at all, so the primary
+    // duration here is a car trip standing in for the missing walk leg —
+    // show it as a plain taxi time, not a walk/taxi pair.
+    if (mobilityChoice == 'fallback_car') return '택시 $minutes분';
+    final walk = minutesFor('walk_transit');
+    final car = minutesFor('car');
+    if (walk != null && car != null) return '도보 $walk분\n택시 $car분';
+    // mobilityChoice is only trustworthy once the server has echoed it back
+    // per spot (e.g. after a save). A freshly optimized, unsaved plan has no
+    // per-spot mode yet, so show a neutral label instead of guessing.
+    // A lone 'car' here (no walk pairing, not fallback_car) means the
+    // destination's own mobility_choice was 'car' from the start — the
+    // traveler is driving themselves, so this is "자차", not a "택시"
+    // stand-in for a walk that didn't work out.
+    return switch (mobilityChoice) {
+      'walk_transit' => '도보 $minutes분',
+      'car' => '자차 $minutes분',
+      _ => '이동 $minutes분',
     };
-    return '$mode $minutes분';
   }
 
   RouteSpot withSavedRegionSpotId(int? id, {List<Map<String, dynamic>>? options}) => RouteSpot(
@@ -150,6 +164,12 @@ class RoutePlan {
             throw const FormatException('여행 경로의 장소 형식이 올바르지 않습니다.');
           }
           final spotJson = Map<String, dynamic>.of(rawSpot);
+          // The route API now reports the resolved mode as `mobility_used`
+          // (walk_transit / car / fallback_car). Normalize it into the
+          // legacy `mobility_choice` key so the rest of this parser and
+          // RouteSpot.fromJson only need to know one field name.
+          spotJson['mobility_choice'] =
+              spotJson['mobility_used'] ?? spotJson['mobility_choice'];
           spotJson['mobility_choice'] ??= mobilityChoice;
           // Saved routes now group travel values by mode inside mobility_options.
           final options = spotJson['mobility_options'];
@@ -198,8 +218,9 @@ class RoutePlan {
                     segment['duration_minutes'] ??
                         segment['duration_from_prev_minutes'];
               }
-              spotJson['mobility_choice'] =
-                  segment['mobility_choice'] ?? spotJson['mobility_choice'];
+              spotJson['mobility_choice'] = segment['mobility_used'] ??
+                  segment['mobility_choice'] ??
+                  spotJson['mobility_choice'];
             }
           }
           final spot = RouteSpot.fromJson(spotJson);
@@ -235,26 +256,33 @@ class RoutePlan {
     final entries = <Map<String, dynamic>>[];
     byDay.forEach((day, spots) {
       for (var index = 0; index < spots.length; index++) {
-        final spotId = spots[index].savedRegionSpotId;
+        final spot = spots[index];
+        final spotId = spot.savedRegionSpotId;
         if (spotId == null) {
           throw const FormatException('저장할 경로의 장소 ID가 없습니다.');
         }
-        final options = spots[index].travelOptions;
+        final options = spot.travelOptions;
         final walk = options.where((option) => option['mobility_choice'] == 'walk_transit');
         final car = options.where((option) => option['mobility_choice'] == 'car');
         final hasAlternative = index > 0 && walk.isNotEmpty && car.isNotEmpty;
+        final mobilityUsed = index == 0 ? null : spot.mobilityChoice;
         entries.add({
           'saved_region_spot_id': spotId,
           'visit_day': day,
           'visit_order': index + 1,
-          'distance_from_prev_km': hasAlternative ? walk.last['distance_from_prev_km'] : spots[index].distanceFromPreviousKm,
+          'distance_from_prev_km': hasAlternative ? walk.last['distance_from_prev_km'] : spot.distanceFromPreviousKm,
           'duration_from_prev_minutes':
-              hasAlternative ? walk.last['duration_from_prev_minutes'] : spots[index].durationFromPreviousMinutes,
-          if (hasAlternative) 'car_alternative': {
-            'mobility_choice': 'car',
-            'distance_from_prev_km': car.last['distance_from_prev_km'],
-            'duration_from_prev_minutes': car.last['duration_from_prev_minutes'],
-          },
+              hasAlternative ? walk.last['duration_from_prev_minutes'] : spot.durationFromPreviousMinutes,
+          'mobility_used': mobilityUsed,
+          'is_fallback': mobilityUsed == 'fallback_car',
+          'car_alternative': hasAlternative
+              ? {
+                  'mobility_choice': 'car',
+                  'distance_from_prev_km': car.last['distance_from_prev_km'],
+                  'duration_from_prev_minutes': car.last['duration_from_prev_minutes'],
+                  'is_fallback': false,
+                }
+              : null,
         });
       }
     });

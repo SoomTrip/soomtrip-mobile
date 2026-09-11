@@ -8,7 +8,6 @@ import 'saved_region_service.dart';
 
 class RouteScreen extends StatefulWidget {
   final RoutePlan? initialPlan;
-  final String? mobilityChoice;
   final int savedRegionId;
   final String travelPeriod;
   final List<SavedSpot> selectedSpots;
@@ -16,7 +15,6 @@ class RouteScreen extends StatefulWidget {
   const RouteScreen({
     super.key,
     this.initialPlan,
-    this.mobilityChoice,
     required this.savedRegionId,
     required this.travelPeriod,
     required this.selectedSpots,
@@ -38,6 +36,9 @@ class _RouteScreenState extends State<RouteScreen> {
   // 🌟 네이버 지도 컨트롤러
   NaverMapController? _mapController;
   Future<NOverlayImage?>? _spotIconFuture;
+  NPolylineOverlay? _routePolyline;
+  List<NLatLng> _routePathPoints = const [];
+  bool _isAnimatingRoute = false;
   int _selectedDay = 1;
   bool _showRouteList = false;
   RoutePlan? _routePlan;
@@ -245,6 +246,8 @@ class _RouteScreenState extends State<RouteScreen> {
       );
       await controller.addOverlay(polyline);
       if (!mounted || !identical(controller, _mapController)) return;
+      _routePolyline = polyline;
+      _routePathPoints = pathPoints;
 
       // 3. 모든 경로가 한눈에 보이도록 카메라 줌 자동 조절
       final cameraUpdate = NCameraUpdate.fitBounds(
@@ -252,6 +255,40 @@ class _RouteScreenState extends State<RouteScreen> {
         padding: const EdgeInsets.all(50),
       );
       await controller.updateCamera(cameraUpdate);
+    }
+  }
+
+  // 🌟 '경로보기' 버튼: 첫 스팟부터 마지막 스팟까지 선이 그려지는 과정을 애니메이션으로 보여줌
+  Future<void> _animateRouteDrawing() async {
+    final polyline = _routePolyline;
+    final points = _routePathPoints;
+    if (polyline == null || points.length < 2 || _isAnimatingRoute) return;
+
+    setState(() => _isAnimatingRoute = true);
+    try {
+      // 구간마다 점을 촘촘히 보간해서 순간이동이 아니라 선이 자라나는 것처럼 보이게 함
+      const stepsPerSegment = 24;
+      final animatedPoints = <NLatLng>[points.first];
+      for (var i = 0; i < points.length - 1; i++) {
+        final start = points[i];
+        final end = points[i + 1];
+        for (var step = 1; step <= stepsPerSegment; step++) {
+          final t = step / stepsPerSegment;
+          animatedPoints.add(NLatLng(
+            start.latitude + (end.latitude - start.latitude) * t,
+            start.longitude + (end.longitude - start.longitude) * t,
+          ));
+        }
+      }
+
+      polyline.setCoords([animatedPoints.first]);
+      for (var revealed = 2; revealed <= animatedPoints.length; revealed++) {
+        if (!mounted || !identical(polyline, _routePolyline)) return;
+        polyline.setCoords(animatedPoints.sublist(0, revealed));
+        await Future.delayed(const Duration(milliseconds: 16));
+      }
+    } finally {
+      if (mounted) setState(() => _isAnimatingRoute = false);
     }
   }
 
@@ -434,6 +471,57 @@ class _RouteScreenState extends State<RouteScreen> {
     );
   }
 
+  // 🌟 지도를 확대/이동해서 봤어도 전체 경로가 한눈에 보이는 초기 시점으로 되돌리는 버튼
+  Future<void> _resetCameraToRoute() async {
+    final controller = _mapController;
+    final points = _routePathPoints;
+    if (controller == null || points.length < 2) return;
+    await controller.updateCamera(NCameraUpdate.fitBounds(
+      NLatLngBounds.from(points),
+      padding: const EdgeInsets.all(50),
+    ));
+  }
+
+  Widget _buildResetCameraButton() {
+    return Material(
+      color: Colors.white,
+      shape: const CircleBorder(),
+      elevation: 2,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: _resetCameraToRoute,
+        child: const Padding(
+          padding: EdgeInsets.all(8),
+          child: Icon(Icons.my_location_rounded,
+              size: 22, color: Colors.grey),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRouteViewButton() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: _isAnimatingRoute ? null : _animateRouteDrawing,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF4A7C59), width: 1.5),
+          ),
+          child: const Text('경로보기',
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF4A7C59))),
+        ),
+      ),
+    );
+  }
+
   Widget _buildRouteContent() {
     return Column(
       children: [
@@ -458,17 +546,25 @@ class _RouteScreenState extends State<RouteScreen> {
             // 🌟 더미 텍스트를 지우고 NaverMap 위젯 삽입!
             child: _showRouteList
                 ? _buildRouteList()
-                : NaverMap(
-                    key: ValueKey(_selectedDay),
-                    options: const NaverMapViewOptions(
-                      mapType: NMapType.basic,
-                      logoClickEnable: false, // 네이버 로고 클릭 방지
+                : Stack(children: [
+                    NaverMap(
+                      key: ValueKey(_selectedDay),
+                      options: const NaverMapViewOptions(
+                        mapType: NMapType.basic,
+                        logoClickEnable: false, // 네이버 로고 클릭 방지
+                      ),
+                      onMapReady: (controller) {
+                        _mapController = controller;
+                        _drawRouteOnMap(); // 지도가 로딩되면 마커와 선을 그림
+                      },
                     ),
-                    onMapReady: (controller) {
-                      _mapController = controller;
-                      _drawRouteOnMap(); // 지도가 로딩되면 마커와 선을 그림
-                    },
-                  ),
+                    Positioned(
+                        left: 12, top: 12, child: _buildRouteViewButton()),
+                    Positioned(
+                        right: 12,
+                        bottom: 12,
+                        child: _buildResetCameraButton()),
+                  ]),
           ),
         ),
 
@@ -513,7 +609,7 @@ class _RouteScreenState extends State<RouteScreen> {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: _travelTime(_currentSpots[index + 1])
-                                      .contains('택시이동')
+                                      .contains('\n')
                                   ? 16
                                   : 18,
                               color: Color(0xFF4A7C59),
@@ -591,6 +687,5 @@ class _RouteScreenState extends State<RouteScreen> {
     );
   }
 
-  String _travelTime(RouteSpot spot) =>
-      spot.travelLabel(fallbackMode: widget.mobilityChoice);
+  String _travelTime(RouteSpot spot) => spot.travelLabel();
 }

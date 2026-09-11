@@ -236,21 +236,18 @@ class _StampScreenState extends State<StampScreen> {
                                     flex: 7,
                                     child: FittedBox(
                                       fit: BoxFit.scaleDown,
-                                      alignment: Alignment.centerRight,
+                                      alignment: Alignment.centerLeft,
                                       child: Row(
                                         children: [
+                                          SizedBox(
+                                              width: constraints.maxWidth *
+                                                  (64 / 828)),
                                           Text(_formatDiaryDate(entry.date),
                                               style: const TextStyle(
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.bold,
                                                   fontFamily: 'CustomFont')),
                                           const SizedBox(width: 10),
-                                          const Text('날씨',
-                                              style: TextStyle(
-                                                  fontSize: 17,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontFamily: 'CustomFont')),
-                                          const SizedBox(width: 4),
                                           Icon(_weatherIconFor(entry.weather),
                                               size: 20, color: Colors.black87),
                                         ],
@@ -288,17 +285,21 @@ class _StampScreenState extends State<StampScreen> {
                               flex: 369,
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 16.0, vertical: 2.0),
-                                child: SingleChildScrollView(
-                                  child: Text(
-                                    message?.isNotEmpty == true
-                                        ? message!
-                                        : '작성된 글이 없어요.',
-                                    style: TextStyle(
-                                        fontSize: bodyFontSize,
-                                        height: 2.2,
-                                        fontFamily: 'CustomFont',
-                                        color: const Color(0xFF333333)),
+                                    horizontal: 4.0, vertical: 2.0),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: SingleChildScrollView(
+                                    child: Text(
+                                      message?.isNotEmpty == true
+                                          ? message!
+                                          : '작성된 글이 없어요.',
+                                      textAlign: TextAlign.left,
+                                      style: TextStyle(
+                                          fontSize: bodyFontSize,
+                                          height: 2.2,
+                                          fontFamily: 'CustomFont',
+                                          color: const Color(0xFF333333)),
+                                    ),
                                   ),
                                 ),
                               ),

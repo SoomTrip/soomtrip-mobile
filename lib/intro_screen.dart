@@ -15,13 +15,13 @@ class _IntroScreenState extends State<IntroScreen> {
     (
       image: 'assets/images/intro1.png',
       title: 'TRAVEL GACHA',
-      body: '취향 월드컵을 진행하면서\n나의 여행 스케치북을 완성하고,\n가챠를 통해 랜덤 여행지를 추천받아요',
+      body: '취향 월드컵을 진행하면서\n나의 여행 스케치북을 완성하고,\n가챠를 통해 나만의 숨겨진 여행지를 뽑아요',
     ),
     (
       image: 'assets/images/intro2.png',
       title: 'ROUTE & DIARY',
       body:
-          '마이페이지에서 가챠로 얻은 여행지를 볼 수 있어요.\n각 여행지별로 여행 경로를 추천받고,\n그림일기를 그릴 수 있어요',
+          '가챠로 얻은 여행지를 볼 수 있어요.\n각 여행지별로 여행 경로를 추천받고,\n여행 후 그림일기로 추억을 기억할 수 있어요',
     ),
     (
       image: 'assets/images/intro3.png',
@@ -31,7 +31,7 @@ class _IntroScreenState extends State<IntroScreen> {
     (
       image: 'assets/images/intro4.png',
       title: 'FRIENDS',
-      body: '친구와 여행지를 공유할 수 있어요.\n함께 여행하는 기쁨을 누려보세요',
+      body: '친구와 여행지를 공유할 수 있어요.\n함께 여행하는 기쁨을 누려보세요!',
     ),
   ];
 
