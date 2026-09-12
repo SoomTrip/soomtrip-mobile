@@ -51,19 +51,23 @@ class _SplashScreenState extends State<SplashScreen> {
       await Future<void>.delayed(const Duration(seconds: 2));
       if (!mounted) return;
 
-      final completedIntro = await AuthService.hasCompletedIntro();
-      if (!mounted) return;
-      if (!completedIntro) {
-        _openIntro();
-        return;
-      }
-
-      // 인트로는 봤어도 월드컵/가챠 도중 이탈했을 수 있으니, 서버에 저장된
-      // onboarding_completed 플래그로 홈 진입 여부를 계정 단위로 판단한다.
+      // 서버의 onboarding_completed가 계정 단위의 진짜 정답이라, 로컬 인트로
+      // 완료 플래그보다 먼저 확인한다. (로컬 플래그는 기기를 재설치하면
+      // 초기화되므로, 이미 온보딩을 끝낸 계정이 재설치 후 재로그인해도
+      // 계속 인트로로 돌아가는 걸 막기 위함.)
       final onboardingCompleted = await AuthService.getOnboardingCompleted();
       if (!mounted) return;
       if (onboardingCompleted) {
         _openHome();
+        return;
+      }
+
+      // 온보딩이 아직 안 끝났다면, 인트로를 본 적 있는지로 "처음 보는 안내"와
+      // "월드컵/가챠 도중 이탈해서 이어서 해야 하는 경우"를 구분한다.
+      final completedIntro = await AuthService.hasCompletedIntro();
+      if (!mounted) return;
+      if (!completedIntro) {
+        _openIntro();
       } else {
         _openWorldCup();
       }
@@ -148,8 +152,12 @@ class _SplashScreenState extends State<SplashScreen> {
 
       if (!mounted) return;
       // 이미 온보딩(월드컵→가챠)까지 끝낸 계정이 로그아웃 후 다시 로그인한
-      // 경우에는 인트로를 또 보여주지 않고 바로 홈으로 보낸다.
+      // 경우에는 인트로를 또 보여주지 않고 바로 홈으로 보낸다. 이때 로컬
+      // 인트로 플래그도 같이 맞춰둬야, 다음에 앱을 그냥 재실행했을 때도
+      // _checkLoginStatus()가 일관되게 판단할 수 있다.
       if (onboardingCompleted) {
+        await AuthService.markIntroCompleted();
+        if (!mounted) return;
         _openHome();
       } else {
         _openIntro();

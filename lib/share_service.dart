@@ -15,6 +15,7 @@ class ShareRequest {
   final int receiverId;
   final String receiverNickname;
   final String? receiverProfileImage;
+  final DateTime createdAt;
 
   const ShareRequest({
     required this.shareId,
@@ -27,6 +28,7 @@ class ShareRequest {
     required this.receiverId,
     required this.receiverNickname,
     this.receiverProfileImage,
+    required this.createdAt,
   });
 
   factory ShareRequest.fromJson(Map<String, dynamic> json) {
@@ -38,6 +40,7 @@ class ShareRequest {
     final senderNickname = json['sender_nickname'];
     final receiverId = json['receiver_id'];
     final receiverNickname = json['receiver_nickname'];
+    final createdAtRaw = json['created_at'];
     if (shareId is! int ||
         savedRegionId is! int ||
         regionName is! String ||
@@ -45,7 +48,8 @@ class ShareRequest {
         senderId is! int ||
         senderNickname is! String ||
         receiverId is! int ||
-        receiverNickname is! String) {
+        receiverNickname is! String ||
+        createdAtRaw is! String) {
       throw const FormatException('공유 요청 응답 형식이 올바르지 않습니다.');
     }
     return ShareRequest(
@@ -59,6 +63,7 @@ class ShareRequest {
       receiverId: receiverId,
       receiverNickname: receiverNickname,
       receiverProfileImage: json['receiver_profile_image'] as String?,
+      createdAt: DateTime.parse(createdAtRaw),
     );
   }
 }

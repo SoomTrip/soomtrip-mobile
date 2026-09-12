@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'auth_service.dart';
 import 'friend_service.dart';
 import 'home_logo_button.dart';
+import 'relative_time.dart';
 import 'saved_region_service.dart';
 import 'share_service.dart';
 import 'splash_screen.dart';
@@ -142,7 +143,8 @@ class _MyPageScreenState extends State<MyPageScreen> {
             children: [
               Text(request.regionName,
                   style: const TextStyle(fontWeight: FontWeight.bold)),
-              Text('${request.senderNickname} 님이 공유했어요',
+              Text(
+                  '${request.senderNickname} 님이 공유했어요 · ${formatRelativeTime(request.createdAt)}',
                   style: const TextStyle(color: Colors.grey, fontSize: 12)),
             ],
           ),
@@ -200,7 +202,18 @@ class _MyPageScreenState extends State<MyPageScreen> {
         setState(() {
           _userCode = user.userCode;
           _nickname = user.nickname;
-          _profileImageUrl ??= user.profileImage;
+          final serverProfileImage = user.profileImage;
+          // 앱이 제공하는 기본 프로필 사진은 URL이 아니라 에셋 경로 문자열로
+          // 서버에 저장된다. 로컬 캐시가 비어있으면(재설치 등) 서버 값으로 복원한다.
+          if (_selectedProfileAsset == null &&
+              _selectedProfileBytes == null &&
+              serverProfileImage != null &&
+              serverProfileImage.startsWith('assets/')) {
+            _selectedProfileAsset = serverProfileImage;
+            preferences.setString(_profileAssetKey, serverProfileImage);
+          } else {
+            _profileImageUrl ??= serverProfileImage;
+          }
         });
       }
     } catch (error) {
@@ -416,6 +429,17 @@ class _MyPageScreenState extends State<MyPageScreen> {
                                           _profileAssetKey, draftAsset!);
                                       await preferences
                                           .remove(_profileBytesKey);
+                                      // 앱이 제공하는 기본 프로필 사진은 서버에도 저장해서
+                                      // 재설치/기기 변경 후에도 유지되게 한다.
+                                      // (갤러리에서 고른 사진은 아직 서버 업로드 기능이 없어
+                                      // 이 기기에만 남는다.)
+                                      try {
+                                        await AuthService.updateProfileImage(
+                                            draftAsset!);
+                                      } catch (error) {
+                                        debugPrint(
+                                            '[My Page] 프로필 사진 서버 동기화 실패: $error');
+                                      }
                                     }
                                     if (!mounted || !sheetContext.mounted) {
                                       return;
@@ -592,13 +616,28 @@ class _MyPageScreenState extends State<MyPageScreen> {
                     color: Color(0xFF6B4E31)),
                 if (_pendingReceivedShares.isNotEmpty)
                   Positioned(
-                    right: -1,
-                    top: -1,
+                    right: -6,
+                    top: -6,
                     child: Container(
-                      width: 10,
-                      height: 10,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      constraints:
+                          const BoxConstraints(minWidth: 16, minHeight: 16),
                       decoration: const BoxDecoration(
-                          color: Color(0xFFE57373), shape: BoxShape.circle),
+                        color: Color(0xFFE57373),
+                        borderRadius: BorderRadius.all(Radius.circular(999)),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        _pendingReceivedShares.length > 99
+                            ? '99+'
+                            : '${_pendingReceivedShares.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          height: 1,
+                        ),
+                      ),
                     ),
                   ),
               ]),

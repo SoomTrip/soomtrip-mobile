@@ -35,23 +35,30 @@ class FriendRelation {
   final int id;
   final FriendUser requester;
   final FriendUser receiver;
+  final DateTime createdAt;
 
   const FriendRelation(
-      {required this.id, required this.requester, required this.receiver});
+      {required this.id,
+      required this.requester,
+      required this.receiver,
+      required this.createdAt});
 
   factory FriendRelation.fromJson(Map<String, dynamic> json) {
     final id = json['id'];
     final requester = json['requester'];
     final receiver = json['receiver'];
+    final createdAtRaw = json['created_at'];
     if (id is! int ||
         requester is! Map<String, dynamic> ||
-        receiver is! Map<String, dynamic>) {
+        receiver is! Map<String, dynamic> ||
+        createdAtRaw is! String) {
       throw const FormatException('친구 응답 형식이 올바르지 않습니다.');
     }
     return FriendRelation(
         id: id,
         requester: FriendUser.fromJson(requester),
-        receiver: FriendUser.fromJson(receiver));
+        receiver: FriendUser.fromJson(receiver),
+        createdAt: DateTime.parse(createdAtRaw));
   }
 
   FriendUser otherUser(int myUserId) =>

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import 'friend_service.dart';
 import 'home_logo_button.dart';
+import 'relative_time.dart';
 
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
@@ -394,7 +395,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(user.nickname,
               style: const TextStyle(fontWeight: FontWeight.bold)),
-          Text(user.userCode,
+          Text('${user.userCode} · ${formatRelativeTime(request.createdAt)}',
               style: const TextStyle(color: Colors.grey, fontSize: 12)),
         ])),
         TextButton(

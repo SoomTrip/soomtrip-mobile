@@ -73,6 +73,30 @@ class AuthService {
     }
   }
 
+  // 앱이 기본 제공하는 프로필 사진(에셋 경로 문자열)을 서버에도 저장해서,
+  // 앱을 지웠다 다시 깔아도(기기 변경 포함) 골라둔 사진이 유지되게 한다.
+  static Future<void> updateProfileImage(String profileImage) async {
+    final jwt = await getJwt();
+    if (jwt == null || jwt.isEmpty) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    final response = await client
+        .patch(
+          Uri.parse(_meUrl),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $jwt',
+          },
+          body: jsonEncode({'profile_image': profileImage}),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('프로필 사진 동기화 실패 (${response.statusCode})');
+    }
+  }
+
   static Future<bool> hasJwt() async {
     final preferences = await SharedPreferences.getInstance();
     return preferences.getString(_jwtKey)?.isNotEmpty ?? false;
