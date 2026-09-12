@@ -669,7 +669,7 @@ class _RouteScreenState extends State<RouteScreen> {
                     left: 24,
                     right: 24,
                     height: 60,
-                    child: RouteSignLabel(name: spot.name),
+                    child: RouteSignLabel(name: routeSignName(spot.name)),
                   ),
                 ],
               ),

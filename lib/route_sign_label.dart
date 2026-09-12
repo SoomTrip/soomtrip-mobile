@@ -1,16 +1,9 @@
 import 'package:flutter/material.dart';
 
-// Only omit recognizable supplementary notes; branch/location names stay intact.
+// Parenthetical notes are omitted from the compact sign label.
 String routeSignName(String name) {
   final shortened = name
-      .replaceAllMapped(RegExp(r'\(([^()]*)\)|（([^（）]*)）'), (match) {
-        final note = (match.group(1) ?? match.group(2)!).trim();
-        return RegExp(r'^(구\s*[:：]|구\s+|舊|영문\s*[:：]|별칭\s*[:：])')
-                    .hasMatch(note) ||
-                RegExp(r'^[a-zA-Z\s\d.,&\x27-]+$').hasMatch(note)
-            ? ''
-            : match.group(0)!;
-      })
+      .replaceAll(RegExp(r'\s*[\(（][^\)）]*[\)）]'), '')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
   return shortened.isEmpty ? name.trim() : shortened;
