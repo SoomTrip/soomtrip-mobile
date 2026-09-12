@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'auth_service.dart';
 import 'friend_service.dart';
 import 'home_logo_button.dart';
+import 'relative_time.dart';
 import 'saved_region_service.dart';
 import 'share_service.dart';
 import 'splash_screen.dart';
@@ -142,7 +143,8 @@ class _MyPageScreenState extends State<MyPageScreen> {
             children: [
               Text(request.regionName,
                   style: const TextStyle(fontWeight: FontWeight.bold)),
-              Text('${request.senderNickname} 님이 공유했어요',
+              Text(
+                  '${request.senderNickname} 님이 공유했어요 · ${formatRelativeTime(request.createdAt)}',
                   style: const TextStyle(color: Colors.grey, fontSize: 12)),
             ],
           ),
@@ -614,13 +616,28 @@ class _MyPageScreenState extends State<MyPageScreen> {
                     color: Color(0xFF6B4E31)),
                 if (_pendingReceivedShares.isNotEmpty)
                   Positioned(
-                    right: -1,
-                    top: -1,
+                    right: -6,
+                    top: -6,
                     child: Container(
-                      width: 10,
-                      height: 10,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      constraints:
+                          const BoxConstraints(minWidth: 16, minHeight: 16),
                       decoration: const BoxDecoration(
-                          color: Color(0xFFE57373), shape: BoxShape.circle),
+                        color: Color(0xFFE57373),
+                        borderRadius: BorderRadius.all(Radius.circular(999)),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        _pendingReceivedShares.length > 99
+                            ? '99+'
+                            : '${_pendingReceivedShares.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          height: 1,
+                        ),
+                      ),
                     ),
                   ),
               ]),

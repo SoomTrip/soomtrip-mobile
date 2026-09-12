@@ -421,13 +421,9 @@ class _StampScreenState extends State<StampScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Stack(
                   children: [
-                    // 배경 도화지 이미지 고정
-                    Positioned.fill(
-                      child: Image.asset('assets/images/stamp_bg.png',
-                          fit: BoxFit.fill),
-                    ),
-
-                    // PageView로 좌우 스와이프 기능 추가
+                    // PageView로 좌우 스와이프 기능 추가.
+                    // 도화지 배경을 페이지별로 각각 넣어서, 스탬프뿐 아니라
+                    // 도장판 자체도 새 판처럼 같이 넘어가게 한다.
                     PageView.builder(
                       controller: _pageController,
                       itemCount: totalPages,
@@ -438,30 +434,35 @@ class _StampScreenState extends State<StampScreen> {
                         return LayoutBuilder(
                           builder: (context, constraints) {
                             return Stack(
-                              children:
-                                  List.generate(_stampsPerPage, (slotIndex) {
-                                int stampIndex =
-                                    (pageIndex * _stampsPerPage) + slotIndex;
-                                StampData? stampData =
-                                    stampIndex < myStamps.length
-                                        ? myStamps[stampIndex]
-                                        : null;
-                                var slot = pageSlots[slotIndex];
+                              children: [
+                                Positioned.fill(
+                                  child: Image.asset('assets/images/stamp_bg.png',
+                                      fit: BoxFit.fill),
+                                ),
+                                ...List.generate(_stampsPerPage, (slotIndex) {
+                                  int stampIndex =
+                                      (pageIndex * _stampsPerPage) + slotIndex;
+                                  StampData? stampData =
+                                      stampIndex < myStamps.length
+                                          ? myStamps[stampIndex]
+                                          : null;
+                                  var slot = pageSlots[slotIndex];
 
-                                return Positioned(
-                                  left: constraints.maxWidth * slot['dx']!,
-                                  top: constraints.maxHeight * slot['dy']!,
-                                  child: Transform.rotate(
-                                    angle: slot['angle']!,
-                                    child: GestureDetector(
-                                      onTap: stampData == null
-                                          ? null
-                                          : () => _onStampTapped(stampData),
-                                      child: _buildStampItem(stampData),
+                                  return Positioned(
+                                    left: constraints.maxWidth * slot['dx']!,
+                                    top: constraints.maxHeight * slot['dy']!,
+                                    child: Transform.rotate(
+                                      angle: slot['angle']!,
+                                      child: GestureDetector(
+                                        onTap: stampData == null
+                                            ? null
+                                            : () => _onStampTapped(stampData),
+                                        child: _buildStampItem(stampData),
+                                      ),
                                     ),
-                                  ),
-                                );
-                              }),
+                                  );
+                                }),
+                              ],
                             );
                           },
                         );
