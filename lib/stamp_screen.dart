@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'diary_entry_service.dart';
+import 'home_logo_button.dart';
 import 'my_destination_screen.dart';
 import 'picture_diary_screen.dart';
 import 'saved_region_service.dart';
@@ -399,11 +400,7 @@ class _StampScreenState extends State<StampScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text("숨트립 🌱",
-            style: TextStyle(
-                color: Color(0xFF4A7C59),
-                fontWeight: FontWeight.bold,
-                fontSize: 20)),
+        actions: const [HomeLogoButton()],
       ),
       body: SafeArea(
         child: Column(
@@ -577,7 +574,7 @@ class _StampScreenState extends State<StampScreen> {
           Positioned(
             left: 23,
             right: 23,
-            top: 65,
+            top: 67,
             bottom: 39,
             child: FittedBox(
               fit: BoxFit.scaleDown,

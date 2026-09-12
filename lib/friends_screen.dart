@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'friend_service.dart';
+import 'home_logo_button.dart';
 
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
@@ -179,14 +180,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('숨트립 🌱',
-            style: TextStyle(
-                color: Color(0xFF4A7C59), fontWeight: FontWeight.bold)),
-        actions: [
-          IconButton(
-              icon: const Icon(Icons.refresh, color: Color(0xFF6B4E31)),
-              onPressed: _loadData)
-        ],
+        leading: IconButton(
+            icon: const Icon(Icons.refresh, color: Color(0xFF6B4E31)),
+            onPressed: _loadData),
+        actions: const [HomeLogoButton()],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

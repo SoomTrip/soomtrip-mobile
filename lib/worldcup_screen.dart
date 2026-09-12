@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:gal/gal.dart';
 import 'gacha_screen.dart'; // 가챠 스크린 연결
 import 'preference_service.dart';
 import 'recommendation_service.dart';
@@ -139,8 +140,40 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
     }
   }
 
-  void _onSelectOption(double extremeValue) {
-    _handleSliderEnd(extremeValue);
+  // 이미 답한 라운드로 되돌아가면, 그때 밀었던 슬라이더 위치를 그대로 복원한다.
+  double _sliderValueForRound(int index) {
+    final selection = finalUserSelection['Round ${index + 1}'];
+    if (selection is! Map<String, dynamic>) return 50.0;
+    final tag = selection['tag'];
+    final score = selection['score'];
+    if (tag is! Map<String, dynamic> || score is! num) return 50.0;
+
+    final round = rounds[index];
+    if (identical(tag, round.tagA)) return 50.0 - score;
+    if (identical(tag, round.tagB)) return 50.0 + score;
+    return 50.0;
+  }
+
+  bool _isRoundAnswered(int index) =>
+      finalUserSelection.containsKey('Round ${index + 1}');
+
+  void _goToPreviousRound() {
+    if (currentRoundIndex == 0) return;
+    setState(() {
+      currentRoundIndex--;
+      _sliderValue = _sliderValueForRound(currentRoundIndex);
+    });
+  }
+
+  void _goToNextRound() {
+    // 현재 라운드에 이미 답을 한 경우에만 다음 라운드로 넘어갈 수 있다.
+    // (아직 안 넘어간 마지막 라운드는 반드시 슬라이더로 직접 답해야 한다.)
+    if (currentRoundIndex >= rounds.length - 1) return;
+    if (!_isRoundAnswered(currentRoundIndex)) return;
+    setState(() {
+      currentRoundIndex++;
+      _sliderValue = _sliderValueForRound(currentRoundIndex);
+    });
   }
 
   Map<String, dynamic> _buildPreferencePayload() {
@@ -235,6 +268,18 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
   // 🌟 스케치북 이미지 저장 로직
   Future<void> _saveSketchbookImage() async {
     try {
+      final hasAccess = await Gal.hasAccess(toAlbum: true);
+      if (!hasAccess) {
+        final granted = await Gal.requestAccess(toAlbum: true);
+        if (!granted) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("갤러리 접근 권한이 필요해요. 설정에서 허용해주세요.")),
+          );
+          return;
+        }
+      }
+
       RenderRepaintBoundary boundary = _sketchbookKey.currentContext!
           .findRenderObject() as RenderRepaintBoundary;
       ui.Image image = await boundary.toImage(pixelRatio: 3.0);
@@ -242,8 +287,8 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
           await image.toByteData(format: ui.ImageByteFormat.png);
       Uint8List pngBytes = byteData!.buffer.asUint8List();
 
-      // TODO: 실제 기기 저장을 원하시면 터미널에 `flutter pub add image_gallery_saver` 입력 후 아래 주석을 풀어주세요.
-      // await ImageGallerySaver.saveImage(pngBytes, name: "soomtrip_sketchbook");
+      await Gal.putImageBytes(pngBytes,
+          album: "SoomTrip", name: "soomtrip_sketchbook");
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -254,7 +299,11 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
         ),
       );
     } catch (e) {
-      print("이미지 저장 실패: $e");
+      debugPrint("이미지 저장 실패: $e");
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("스케치북 저장에 실패했어요. 다시 시도해주세요.")),
+      );
     }
   }
 
@@ -420,12 +469,54 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
 
             Padding(
               padding: const EdgeInsets.only(top: 8, bottom: 4),
-              child: Text(
-                _isCompleted ? "취향 분석완료✨" : "손잡이를 더 끌리는 쪽으로 밀어봐! 👆",
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: _isCompleted ? const Color(0xFF4A7C59) : Colors.grey,
+              child: SizedBox(
+                // 화살표(Positioned)가 화면 양 끝에 붙도록 폭은 꽉 채우되, 높이는
+                // 아래 Text의 자연스러운 높이만 차지해서 스케치북/슬라이더 영역
+                // 크기가 화살표 추가 전과 동일하게 유지되도록 한다.
+                width: double.infinity,
+                child: Stack(
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.none,
+                  children: [
+                    // 텍스트만 이 Stack의 높이를 결정하므로, 화살표를 추가하기 전과
+                    // 스케치북/슬라이더 영역 크기가 동일하게 유지된다.
+                    Text(
+                      _isCompleted ? "취향 분석완료✨" : "더 원하는 쪽으로, 원하는 만큼 밀어봐! 👆",
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: _isCompleted
+                            ? const Color(0xFF4A7C59)
+                            : Colors.grey,
+                      ),
+                    ),
+                    if (!_isCompleted && currentRoundIndex > 0)
+                      Positioned(
+                        left: 0,
+                        child: IconButton(
+                          iconSize: 20,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: _goToPreviousRound,
+                          icon: const Icon(Icons.chevron_left_rounded,
+                              color: Color(0xFF4A7C59)),
+                        ),
+                      ),
+                    if (!_isCompleted &&
+                        currentRoundIndex < rounds.length - 1 &&
+                        _isRoundAnswered(currentRoundIndex))
+                      Positioned(
+                        right: 0,
+                        child: IconButton(
+                          iconSize: 20,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: _goToNextRound,
+                          icon: const Icon(Icons.chevron_right_rounded,
+                              color: Color(0xFF4A7C59)),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -607,19 +698,13 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: GestureDetector(
-                        onTap: () => _onSelectOption(0.0),
-                        child: _buildChoiceCard(
-                            currentRound.wAssetA, currentRound.labelA),
-                      ),
+                      child: _buildChoiceCard(
+                          currentRound.wAssetA, currentRound.labelA),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: GestureDetector(
-                        onTap: () => _onSelectOption(100.0),
-                        child: _buildChoiceCard(
-                            currentRound.wAssetB, currentRound.labelB),
-                      ),
+                      child: _buildChoiceCard(
+                          currentRound.wAssetB, currentRound.labelB),
                     ),
                   ],
                 ),

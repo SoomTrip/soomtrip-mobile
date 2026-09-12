@@ -43,6 +43,7 @@ class _GachaScreenState extends State<GachaScreen>
   ];
   String? _recommendedDestination;
   Map<String, dynamic>? _recommendedCandidate;
+  bool _recommendationFailed = false;
 
   String get _recommendedReview {
     final review = _recommendedCandidate?['one_line_review'];
@@ -88,6 +89,7 @@ class _GachaScreenState extends State<GachaScreen>
       });
     } catch (_) {
       if (!mounted || !identical(request, _recommendationFuture)) return;
+      _recommendationFailed = true;
     }
   }
 
@@ -118,8 +120,18 @@ class _GachaScreenState extends State<GachaScreen>
     _startStatusMessages();
     _shakeController.repeat(reverse: true);
 
+    // 이전 시도가 실패한 상태라면 같은 Future를 재사용하지 않고 새로 요청한다.
+    // (실패로 완료된 Future는 다시 await해도 같은 에러를 즉시 재던지기만 한다.)
+    final request = _recommendationFailed
+        ? RecommendationService.create(preferenceId)
+        : _recommendationFuture;
+    _recommendationFuture = request;
+    if (_recommendationFailed) {
+      _recommendationFailed = false;
+      _watchRecommendation(request);
+    }
+
     try {
-      final request = _recommendationFuture;
       await Future.wait([
         request,
         // 각 안내 문구를 최소 2초씩 보여 준다.
@@ -127,6 +139,7 @@ class _GachaScreenState extends State<GachaScreen>
       ]);
     } catch (error) {
       if (!mounted) return;
+      _recommendationFailed = true;
       _statusTimer?.cancel();
       _shakeController.stop();
       setState(() => _isSpinning = false);
@@ -168,6 +181,7 @@ class _GachaScreenState extends State<GachaScreen>
     final nextRequest = RecommendationService.create(preferenceId);
     _statusTimer?.cancel();
     _recommendationFuture = nextRequest;
+    _recommendationFailed = false;
 
     setState(() {
       _isSpinning = false;

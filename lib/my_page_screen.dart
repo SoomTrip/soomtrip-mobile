@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'auth_service.dart';
 import 'friend_service.dart';
+import 'home_logo_button.dart';
 import 'saved_region_service.dart';
 import 'share_service.dart';
 import 'splash_screen.dart';
@@ -29,8 +30,8 @@ class _MyPageScreenState extends State<MyPageScreen> {
     'assets/images/profile1.jpeg',
     'assets/images/profile2.jpeg',
     'assets/images/profile3.jpeg',
-    'assets/images/profile4.jpeg',
-    'assets/images/profile5.jpeg',
+    'assets/images/profile4.jpg',
+    'assets/images/profile5.jpg',
   ];
 
   bool _isLoggingOut = false;
@@ -42,12 +43,16 @@ class _MyPageScreenState extends State<MyPageScreen> {
   String? _selectedProfileAsset;
   Uint8List? _selectedProfileBytes;
   int? _savedDestinationCount;
+  int? _sharedDestinationCount;
   List<ShareRequest> _pendingReceivedShares = [];
 
   @override
   void initState() {
     super.initState();
     _savedDestinationCount = SavedRegionService.cachedRegions?.length;
+    _sharedDestinationCount = SavedRegionService.cachedRegions
+        ?.where((region) => region.isShared)
+        .length;
     _loadUserProfile();
     _loadSavedDestinationCount();
     _loadReceivedShares();
@@ -159,7 +164,11 @@ class _MyPageScreenState extends State<MyPageScreen> {
     try {
       final savedRegions = await SavedRegionService.getAll();
       if (!mounted) return;
-      setState(() => _savedDestinationCount = savedRegions.length);
+      setState(() {
+        _savedDestinationCount = savedRegions.length;
+        _sharedDestinationCount =
+            savedRegions.where((region) => region.isShared).length;
+      });
     } catch (error) {
       debugPrint('[My Page] Failed to load saved region count: $error');
     }
@@ -569,36 +578,35 @@ class _MyPageScreenState extends State<MyPageScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text("숨트립 🌱",
-            style: TextStyle(
-                color: Color(0xFF4A7C59),
-                fontWeight: FontWeight.bold,
-                fontSize: 22)),
-        actions: [
-          IconButton(
-            icon: Stack(clipBehavior: Clip.none, children: [
-              const Icon(Icons.notifications_none_rounded,
-                  color: Color(0xFF6B4E31)),
-              if (_pendingReceivedShares.isNotEmpty)
-                Positioned(
-                  right: -1,
-                  top: -1,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                        color: Color(0xFFE57373), shape: BoxShape.circle),
+        leadingWidth: 96,
+        leading: Row(
+          children: [
+            IconButton(
+              icon:
+                  const Icon(Icons.settings_outlined, color: Color(0xFF6B4E31)),
+              onPressed: _showSettingsSheet,
+            ),
+            IconButton(
+              icon: Stack(clipBehavior: Clip.none, children: [
+                const Icon(Icons.notifications_none_rounded,
+                    color: Color(0xFF6B4E31)),
+                if (_pendingReceivedShares.isNotEmpty)
+                  Positioned(
+                    right: -1,
+                    top: -1,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                          color: Color(0xFFE57373), shape: BoxShape.circle),
+                    ),
                   ),
-                ),
-            ]),
-            onPressed: _showReceivedSharesSheet,
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Color(0xFF6B4E31)),
-            onPressed: _showSettingsSheet,
-          ),
-          const SizedBox(width: 8),
-        ],
+              ]),
+              onPressed: _showReceivedSharesSheet,
+            ),
+          ],
+        ),
+        actions: const [HomeLogoButton()],
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
@@ -654,7 +662,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
             ),
             SizedBox(height: 8),
             Text(
-              "좋은 여행은\n언제나, 너와 함께",
+              "당신의 여행에\n즐거운 일만 가득하길,",
               style: TextStyle(fontSize: 14, color: Colors.grey, height: 1.4),
             ),
           ],
@@ -708,7 +716,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
                           fontWeight: FontWeight.w600)),
                 ),
                 const SizedBox(height: 8),
-                const Text("오늘도 새로운 곳을 꿈꾸는 중! 🌱",
+                const Text("오늘은 어디로 떠나볼까? 🌱",
                     style: TextStyle(fontSize: 13, color: Colors.black54)),
               ],
             ),
@@ -798,8 +806,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.bookmark_border_rounded,
-                        color: Color(0xFF6B4E31)),
+                    Icon(Icons.bookmark_rounded, color: Color(0xFF4A7C59)),
                     SizedBox(width: 8),
                     Text("저장한 여행지",
                         style: TextStyle(
@@ -842,25 +849,68 @@ class _MyPageScreenState extends State<MyPageScreen> {
   // ==========================================
   // 5. 나의 여행 기록 카드
   // ==========================================
-  Widget _buildTravelRecordsCard() => Container(
+  Widget _buildTravelRecordsCard() {
+    return GestureDetector(
+      onTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => const MyDestinationsScreen(sharedOnly: true)),
+        );
+        if (context.mounted) await _loadSavedDestinationCount();
+      },
+      child: Container(
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-            color: const Color(0xFFFAF9F5),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: const Color(0xFFEBE6D9), width: 1.5)),
-        child: ListTile(
-          contentPadding: const EdgeInsets.all(20),
-          leading:
-              const Icon(Icons.people_alt_rounded, color: Color(0xFF4A7C59)),
-          title: const Text('공유된 여행지',
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) =>
-                      const MyDestinationsScreen(sharedOnly: true))),
+          color: const Color(0xFFFAF9F5),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFEBE6D9), width: 1.5),
         ),
-      );
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.people_alt_rounded, color: Color(0xFF4A7C59)),
+                    SizedBox(width: 8),
+                    Text("공유된 여행지",
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF333333))),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                RichText(
+                  text: TextSpan(
+                    style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.black87,
+                        fontFamily: 'CustomFont'),
+                    children: [
+                      const TextSpan(text: "총 "),
+                      TextSpan(
+                          text: _sharedDestinationCount == null
+                              ? "-곳"
+                              : "${_sharedDestinationCount!}곳",
+                          style: const TextStyle(
+                              color: Color(0xFF4A7C59),
+                              fontWeight: FontWeight.bold)),
+                      const TextSpan(text: "을 공유했어요"),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
 
   // ==========================================
   // 6. 로그아웃 버튼

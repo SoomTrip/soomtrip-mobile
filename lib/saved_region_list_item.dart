@@ -17,12 +17,14 @@ class SavedRegionListItem extends StatelessWidget {
     required this.onDelete,
     required this.onToggleBookmark,
     this.homeLayout = false,
+    this.showShareIcon = false,
     this.isActiveTrip = false,
     this.onToggleStart,
   });
 
   final SavedRegion destination;
   final bool homeLayout;
+  final bool showShareIcon;
   final bool isBookmarked;
   final bool isActiveTrip;
   final bool isDeleting;
@@ -45,8 +47,7 @@ class SavedRegionListItem extends StatelessWidget {
       child: Container(
         margin: EdgeInsets.only(bottom: homeLayout ? 4 : 16),
         padding: EdgeInsets.symmetric(
-            horizontal: homeLayout ? 10 : 20,
-            vertical: homeLayout ? 0 : 18),
+            horizontal: homeLayout ? 10 : 20, vertical: homeLayout ? 0 : 18),
         decoration: BoxDecoration(
           color: const Color(0xFFFAF9F5),
           borderRadius: BorderRadius.circular(24),
@@ -55,8 +56,9 @@ class SavedRegionListItem extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            if (!homeLayout)
+            if (!homeLayout && !showShareIcon)
               const Icon(Icons.location_on_rounded, color: Color(0xFF4A7C59)),
+            if (showShareIcon && destination.isShared) _buildShareBubbleIcon(),
             const SizedBox(width: 8),
             Expanded(
                 child: Text(destination.regionName,
@@ -73,7 +75,8 @@ class SavedRegionListItem extends StatelessWidget {
                       height: 28,
                       child: OutlinedButton(
                           style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 10),
                               minimumSize: const Size(48, 28),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10)),
@@ -106,27 +109,31 @@ class SavedRegionListItem extends StatelessWidget {
 
     if (!homeLayout) return card;
 
-    return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    return IntrinsicHeight(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       destination.isShared
-          ? _ShareBubbleIcon(
-              key: ValueKey(destination.id),
-              label: [
-                if (destination.sharedFrom != null)
-                  'From\n${destination.sharedFrom!.nickname}',
-                if (destination.sharedTo.isNotEmpty)
-                  'To\n${destination.sharedTo.map((person) => person.nickname).join(', ')}',
-              ].join('\n'),
-              received: destination.sharedFrom != null,
-              selected: isBookmarked,
-              onTap: onToggleBookmark)
+          ? _buildShareBubbleIcon()
           : IconButton(
               tooltip: isBookmarked ? '북마크 해제' : '북마크',
               onPressed: onToggleBookmark,
               icon: Icon(isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                  color:
-                      isBookmarked ? const Color(0xFF4A7C59) : Colors.grey)),
+                  color: isBookmarked ? const Color(0xFF4A7C59) : Colors.grey)),
       Expanded(child: card),
-    ]);
+    ]));
+  }
+
+  Widget _buildShareBubbleIcon() {
+    return _ShareBubbleIcon(
+        key: ValueKey(destination.id),
+        label: [
+          if (destination.sharedFrom != null)
+            'From\n${destination.sharedFrom!.nickname}',
+          if (destination.sharedTo.isNotEmpty)
+            'To\n${destination.sharedTo.map((person) => person.nickname).join(', ')}',
+        ].join('\n'),
+        received: destination.sharedFrom != null,
+        selected: isBookmarked,
+        onTap: onToggleBookmark);
   }
 }
 
@@ -194,13 +201,19 @@ class _ShareBubbleIconState extends State<_ShareBubbleIcon> {
           LongPressGestureRecognizer:
               GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
                   () => LongPressGestureRecognizer(
-                      duration: const Duration(seconds: 1)),
+                      duration: const Duration(milliseconds: 500)),
                   (recognizer) => recognizer.onLongPress = _toggleBubble),
         },
         child: IconButton(
           onPressed: widget.onTap,
           icon: Icon(
-              widget.received ? Icons.people_alt_rounded : Icons.person_rounded,
+              widget.selected
+                  ? (widget.received
+                      ? Icons.people_alt_rounded
+                      : Icons.person_rounded)
+                  : (widget.received
+                      ? Icons.people_alt_outlined
+                      : Icons.person_outline_rounded),
               color: widget.selected ? const Color(0xFF4A7C59) : Colors.grey),
         ),
       ),

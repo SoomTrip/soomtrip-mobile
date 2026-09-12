@@ -95,6 +95,7 @@ class _MyDestinationsScreenState extends State<MyDestinationsScreen>
           return SavedRegionListItem(
             key: ValueKey(destination.id),
             destination: destination,
+            showShareIcon: widget.sharedOnly,
             isBookmarked: bookmarkIds.contains(destination.id),
             isDeleting: deletingIds.contains(destination.id),
             onDelete: () => showDeleteDialog(destination),

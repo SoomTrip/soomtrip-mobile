@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart'; // 🌟 네이버 지도 임포트
 
 import 'route_service.dart';
+import 'route_sign_label.dart';
 import 'saved_region_service.dart';
 
 class RouteScreen extends StatefulWidget {
@@ -54,8 +55,7 @@ class _RouteScreenState extends State<RouteScreen> {
   List<RouteSpot> get _currentSpots =>
       _routePlan?.byDay[_selectedDay] ?? const <RouteSpot>[];
 
-  List<int> get _routeDays =>
-      List.generate(_dayCount, (index) => index + 1);
+  List<int> get _routeDays => List.generate(_dayCount, (index) => index + 1);
 
   @override
   void initState() {
@@ -492,8 +492,7 @@ class _RouteScreenState extends State<RouteScreen> {
         onTap: _resetCameraToRoute,
         child: const Padding(
           padding: EdgeInsets.all(8),
-          child: Icon(Icons.my_location_rounded,
-              size: 22, color: Colors.grey),
+          child: Icon(Icons.my_location_rounded, size: 22, color: Colors.grey),
         ),
       ),
     );
@@ -533,7 +532,6 @@ class _RouteScreenState extends State<RouteScreen> {
           flex: 5,
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            clipBehavior: Clip.hardEdge,
             decoration: BoxDecoration(
               color: const Color(0xFFFBF9F4),
               border: Border.all(color: Colors.black87, width: 2),
@@ -543,28 +541,32 @@ class _RouteScreenState extends State<RouteScreen> {
                     color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))
               ],
             ),
-            // 🌟 더미 텍스트를 지우고 NaverMap 위젯 삽입!
-            child: _showRouteList
-                ? _buildRouteList()
-                : Stack(children: [
-                    NaverMap(
-                      key: ValueKey(_selectedDay),
-                      options: const NaverMapViewOptions(
-                        mapType: NMapType.basic,
-                        logoClickEnable: false, // 네이버 로고 클릭 방지
+            // 🌟 NaverMap은 네이티브 뷰라 Container의 clipBehavior만으로는
+            // 모서리가 완전히 잘리지 않아서 ClipRRect로 한 번 더 감싼다.
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: _showRouteList
+                  ? _buildRouteList()
+                  : Stack(children: [
+                      NaverMap(
+                        key: ValueKey(_selectedDay),
+                        options: const NaverMapViewOptions(
+                          mapType: NMapType.basic,
+                          logoClickEnable: false, // 네이버 로고 클릭 방지
+                        ),
+                        onMapReady: (controller) {
+                          _mapController = controller;
+                          _drawRouteOnMap(); // 지도가 로딩되면 마커와 선을 그림
+                        },
                       ),
-                      onMapReady: (controller) {
-                        _mapController = controller;
-                        _drawRouteOnMap(); // 지도가 로딩되면 마커와 선을 그림
-                      },
-                    ),
-                    Positioned(
-                        left: 12, top: 12, child: _buildRouteViewButton()),
-                    Positioned(
-                        right: 12,
-                        bottom: 12,
-                        child: _buildResetCameraButton()),
-                  ]),
+                      Positioned(
+                          left: 12, top: 12, child: _buildRouteViewButton()),
+                      Positioned(
+                          right: 12,
+                          bottom: 12,
+                          child: _buildResetCameraButton()),
+                    ]),
+            ),
           ),
         ),
 
@@ -596,24 +598,27 @@ class _RouteScreenState extends State<RouteScreen> {
                   separatorBuilder: (context, index) => SizedBox(
                     width: 48,
                     child: Align(
-                      alignment: Alignment.bottomCenter,
+                      alignment: const Alignment(0.5, 1.0),
                       child: Padding(
                         padding: const EdgeInsets.only(bottom: 72),
-                        child: OverflowBox(
-                          minWidth: 160,
-                          maxWidth: 160,
-                          child: Text(
-                            _travelTime(_currentSpots[index + 1]),
-                            maxLines: 2,
-                            softWrap: true,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: _travelTime(_currentSpots[index + 1])
-                                      .contains('\n')
-                                  ? 16
-                                  : 18,
-                              color: Color(0xFF4A7C59),
-                              fontWeight: FontWeight.w600,
+                        child: Transform.translate(
+                          offset: const Offset(-20, 0),
+                          child: OverflowBox(
+                            minWidth: 160,
+                            maxWidth: 160,
+                            child: Text(
+                              _travelTime(_currentSpots[index + 1]),
+                              maxLines: 2,
+                              softWrap: true,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: _travelTime(_currentSpots[index + 1])
+                                        .contains('\n')
+                                    ? 16
+                                    : 18,
+                                color: Color(0xFF4A7C59),
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
@@ -649,34 +654,22 @@ class _RouteScreenState extends State<RouteScreen> {
         clipBehavior: Clip.none,
         children: [
           Positioned(
-            bottom: 15,
+            bottom: 35,
             left: 15,
             child: SizedBox(
-              width: 150,
-              height: 300,
+              width: 120,
+              height: 270,
               child: Stack(
                 alignment: Alignment.topCenter,
                 children: [
                   Image.asset('assets/images/sign.png',
-                      width: 120, height: 320, fit: BoxFit.fill),
+                      width: 120, height: 300, fit: BoxFit.fill),
                   Positioned(
-                    top: 20,
-                    left: 16,
-                    right: 16,
-                    height: 88,
-                    child: Center(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(spot.name,
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 14,
-                                fontFamily: 'CustomHandwriting')),
-                      ),
-                    ),
+                    top: 25,
+                    left: 24,
+                    right: 24,
+                    height: 60,
+                    child: RouteSignLabel(name: spot.name),
                   ),
                 ],
               ),

@@ -6,6 +6,8 @@ import 'auth_service.dart';
 import 'friend_service.dart';
 import 'main_screen.dart';
 import 'intro_screen.dart';
+import 'saved_region_service.dart';
+import 'worldcup_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -18,6 +20,8 @@ class _SplashScreenState extends State<SplashScreen> {
   bool isLoggedIn = false;
   bool _isCheckingLogin = true;
   bool _isLoading = false;
+  bool _checkingEntry = false;
+  String? _entryError;
 
   @override
   void initState() {
@@ -26,22 +30,60 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _checkLoginStatus() async {
-    final hasJwt = await AuthService.hasJwt();
-    if (!mounted) return;
+    if (_checkingEntry) return;
+    _checkingEntry = true;
+    setState(() {
+      _entryError = null;
+      _isCheckingLogin = true;
+    });
+    try {
+      final hasJwt = await AuthService.hasJwt();
+      if (!mounted) return;
 
-    if (!hasJwt) {
-      setState(() => _isCheckingLogin = false);
-      return;
-    }
+      if (!hasJwt) {
+        setState(() {
+          _isCheckingLogin = false;
+          isLoggedIn = false;
+        });
+        return;
+      }
 
-    setState(() => isLoggedIn = true);
-    await Future<void>.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-    if (await AuthService.hasCompletedIntro()) {
-      _openHome();
-    } else {
-      _openIntro();
+      setState(() => isLoggedIn = true);
+      await Future<void>.delayed(const Duration(seconds: 2));
+      if (!mounted) return;
+
+      final completedIntro = await AuthService.hasCompletedIntro();
+      if (!mounted) return;
+      if (!completedIntro) {
+        _openIntro();
+        return;
+      }
+
+      // 인트로는 봤어도 월드컵/가챠 도중 이탈했을 수 있으니, 실제로 저장된
+      // 여행지가 있는지 서버에 물어봐서 홈 진입 여부를 계정 단위로 판단한다.
+      final hasSavedRegion = await _hasSavedRegion();
+      if (!mounted) return;
+      if (hasSavedRegion) {
+        _openHome();
+      } else {
+        _openWorldCup();
+      }
+    } catch (_) {
+      final hasJwt = await AuthService.hasJwt();
+      if (!mounted) return;
+      setState(() {
+        isLoggedIn = hasJwt;
+        _isCheckingLogin = false;
+        _entryError = hasJwt ? '회원 정보를 확인하지 못했어요. 다시 시도해 주세요.' : null;
+      });
+    } finally {
+      _checkingEntry = false;
     }
+  }
+
+  Future<bool> _hasSavedRegion() async {
+    final regions = await SavedRegionService.getAll();
+    return regions.isNotEmpty;
   }
 
   void _openHome() {
@@ -55,6 +97,13 @@ class _SplashScreenState extends State<SplashScreen> {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => const IntroScreen()),
+    );
+  }
+
+  void _openWorldCup() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const WorldCupScreen()),
     );
   }
 
@@ -134,6 +183,24 @@ class _SplashScreenState extends State<SplashScreen> {
               fit: BoxFit.cover,
             ),
           ),
+          if (_entryError != null)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 80),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_entryError!, textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: _checkLoginStatus,
+                      child: const Text('다시 시도'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           if (!_isCheckingLogin && !isLoggedIn)
             Align(
               alignment: Alignment.bottomCenter,

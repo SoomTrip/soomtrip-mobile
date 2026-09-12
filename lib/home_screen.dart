@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'destination_detail_screen.dart';
+import 'home_logo_button.dart';
 import 'route_screen.dart';
 import 'route_service.dart';
 import 'saved_destinations_controller.dart';
@@ -129,7 +130,7 @@ class _HomeScreenState extends State<HomeScreen>
       onTap:
           active.isEmpty || _openingTrip ? null : () => _openActiveTrip(active.first),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(5, 0, 5, 8),
+        padding: const EdgeInsets.fromLTRB(5, 0, 5, 28),
         child: AspectRatio(
           aspectRatio: 1448 / 1086,
           child: FittedBox(
@@ -158,10 +159,11 @@ class _HomeScreenState extends State<HomeScreen>
                                       textAlign: TextAlign.center,
                                       style: const TextStyle(
                                           fontSize: 100,
-                                          fontWeight: FontWeight.bold,
+                                          fontWeight: FontWeight.w900,
                                           color: Color(0xFF4A7C59))))),
+                          if (name != null) const SizedBox(height: 24),
                           if (name != null)
-                            const Text('즐거운 여행 되세요~! ☺️',
+                            const Text('클릭하시면 추천 경로로 바로 이동해요. \n즐거운 여행 되세요~!☺️',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                     fontSize: 45,
@@ -208,38 +210,44 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFBF9F4), // 시안에 맞춘 따뜻한 아이보리 배경
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          tooltip: '앱 정보',
+          onPressed: _showAppInfoDialog,
+          icon: const Icon(Icons.help_outline_rounded, color: Colors.grey),
+        ),
+        actions: const [HomeLogoButton()],
+      ),
       body: SafeArea(
         child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 12, 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('숨트립',
-                    style: TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF4A7C59))),
-                IconButton(
-                  tooltip: '앱 정보',
-                  onPressed: _showAppInfoDialog,
-                  icon: const Icon(Icons.help_outline_rounded,
-                      color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
           _buildTraveling(),
           Expanded(
               flex: 2,
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 24),
-                        child: Text('저장한 여행지 🗺️',
-                            style: TextStyle(
-                                fontSize: 20, fontWeight: FontWeight.bold))),
+                    Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 24, 12),
+                        child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF4A7C59),
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                              Icon(Icons.location_on_rounded, color: Colors.white),
+                              SizedBox(width: 8),
+                              Text('저장한 여행지',
+                                  style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white)),
+                            ]))),
                     Expanded(child: _buildBody()),
                   ])),
         ]),
