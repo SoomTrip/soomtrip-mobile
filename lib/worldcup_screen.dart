@@ -1,7 +1,7 @@
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:gal/gal.dart';
 import 'gacha_screen.dart'; // 가챠 스크린 연결
 import 'preference_service.dart';
@@ -52,6 +52,28 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
 
   // 🌟 스케치북 이미지 저장을 위한 Key
   final GlobalKey _sketchbookKey = GlobalKey();
+
+  // 🌟 슬라이더 손잡이용 새싹 이미지 (기기마다 다르게 보이는 이모지 대신 직접 준비한 PNG 사용)
+  ui.Image? _sproutThumbImage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSproutThumbImage();
+  }
+
+  Future<void> _loadSproutThumbImage() async {
+    try {
+      final data = await rootBundle.load('assets/images/worldcup_seedling.png');
+      final image =
+          await ui.instantiateImageCodec(data.buffer.asUint8List());
+      final frame = await image.getNextFrame();
+      if (!mounted) return;
+      setState(() => _sproutThumbImage = frame.image);
+    } catch (error) {
+      debugPrint('[WorldCup] 새싹 손잡이 이미지 로드 실패: $error');
+    }
+  }
 
   final List<RoundItem> rounds = [
     RoundItem(
@@ -752,7 +774,8 @@ class _WorldCupScreenState extends State<WorldCupScreen> {
                     trackHeight: 8.0,
                     activeTrackColor: Colors.transparent,
                     inactiveTrackColor: Colors.transparent,
-                    thumbShape: const _EmojiThumbShape(thumbRadius: 20.0),
+                    thumbShape: _EmojiThumbShape(
+                        thumbRadius: 20.0, image: _sproutThumbImage),
                   ),
                   child: Slider(
                     value: _sliderValue,
@@ -849,7 +872,8 @@ class _CenterFillTrackPainter extends CustomPainter {
 
 class _EmojiThumbShape extends SliderComponentShape {
   final double thumbRadius;
-  const _EmojiThumbShape({this.thumbRadius = 18.0});
+  final ui.Image? image;
+  const _EmojiThumbShape({this.thumbRadius = 18.0, this.image});
 
   @override
   Size getPreferredSize(bool isEnabled, bool isDiscrete) {
@@ -871,13 +895,19 @@ class _EmojiThumbShape extends SliderComponentShape {
     required double textScaleFactor,
     required Size sizeWithOverflow,
   }) {
-    final textPainter = TextPainter(textDirection: TextDirection.ltr);
-    textPainter.text = TextSpan(
-      text: "🌱",
-      style: TextStyle(fontSize: thumbRadius * 1.5),
+    // 새싹 PNG가 로드되기 전에는 아무것도 그리지 않는다 (기기별로 다르게 보이는
+    // 임시 벡터/이모지 대신, 준비된 이미지만 사용한다).
+    final image = this.image;
+    if (image == null) return;
+
+    final canvas = context.canvas;
+    final srcRect =
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+    final dstRect = Rect.fromCenter(
+      center: center,
+      width: thumbRadius * 2,
+      height: thumbRadius * 2,
     );
-    textPainter.layout();
-    textPainter.paint(context.canvas,
-        center - Offset(textPainter.width / 2, textPainter.height / 2));
+    canvas.drawImageRect(image, srcRect, dstRect, Paint());
   }
 }
