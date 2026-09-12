@@ -200,7 +200,18 @@ class _MyPageScreenState extends State<MyPageScreen> {
         setState(() {
           _userCode = user.userCode;
           _nickname = user.nickname;
-          _profileImageUrl ??= user.profileImage;
+          final serverProfileImage = user.profileImage;
+          // 앱이 제공하는 기본 프로필 사진은 URL이 아니라 에셋 경로 문자열로
+          // 서버에 저장된다. 로컬 캐시가 비어있으면(재설치 등) 서버 값으로 복원한다.
+          if (_selectedProfileAsset == null &&
+              _selectedProfileBytes == null &&
+              serverProfileImage != null &&
+              serverProfileImage.startsWith('assets/')) {
+            _selectedProfileAsset = serverProfileImage;
+            preferences.setString(_profileAssetKey, serverProfileImage);
+          } else {
+            _profileImageUrl ??= serverProfileImage;
+          }
         });
       }
     } catch (error) {
@@ -416,6 +427,17 @@ class _MyPageScreenState extends State<MyPageScreen> {
                                           _profileAssetKey, draftAsset!);
                                       await preferences
                                           .remove(_profileBytesKey);
+                                      // 앱이 제공하는 기본 프로필 사진은 서버에도 저장해서
+                                      // 재설치/기기 변경 후에도 유지되게 한다.
+                                      // (갤러리에서 고른 사진은 아직 서버 업로드 기능이 없어
+                                      // 이 기기에만 남는다.)
+                                      try {
+                                        await AuthService.updateProfileImage(
+                                            draftAsset!);
+                                      } catch (error) {
+                                        debugPrint(
+                                            '[My Page] 프로필 사진 서버 동기화 실패: $error');
+                                      }
                                     }
                                     if (!mounted || !sheetContext.mounted) {
                                       return;

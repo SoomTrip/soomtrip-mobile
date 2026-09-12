@@ -60,6 +60,7 @@ dev_dependencies:
   flutter_lints: ^4.0.0
 
   flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.3
 
 # 앱 홈화면 아이콘 설정. assets/icon/icon.png(1024x1024 정사각형 권장)를 넣고
 # `dart run flutter_launcher_icons`를 실행하면 안드로이드/iOS 아이콘이 자동 생성된다.
@@ -73,6 +74,17 @@ flutter_launcher_icons:
   # 이게 없으면 일부 런처는 그냥 원형으로 강제로 잘라서 보여준다.
   adaptive_icon_background: "#FCF9F3"
   adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+
+# 안드로이드가 앱 시작 시 자동으로 보여주는 스플래시 화면(엔진 로딩 중 아이콘+흰배경)을
+# 앱의 실제 첫 화면(splash_screen.dart, #FAF6EE) 배경색과 똑같이 맞춰서
+# 아이콘이 번쩍이지 않고 색이 그대로 이어지는 것처럼 보이게 한다.
+# `dart run flutter_native_splash:create`로 적용한다.
+flutter_native_splash:
+  color: "#FAF6EE"
+  android_12:
+    color: "#FAF6EE"
+  android: true
+  ios: true
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
