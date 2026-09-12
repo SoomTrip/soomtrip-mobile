@@ -43,7 +43,7 @@ class DestinationActionScreen extends StatelessWidget {
                   context,
                   title: "추천 관광지 보러가기",
                   imagePath: 'assets/images/dest1.png',
-                  borderColor: const Color(0xFFFFC107), // 노란 배경 카드 → 노란 테두리
+                  borderColor: const Color(0xFFFFDDA1), // 노란 배경 카드 → 파스텔 노란 테두리
                   onTap: () {
                     // 🌟 누르면 기존에 만들었던 상세(코스) 화면으로 넘어갑니다!
                     Navigator.push(
@@ -67,7 +67,7 @@ class DestinationActionScreen extends StatelessWidget {
                   context,
                   title: "그림일기 작성하기",
                   imagePath: 'assets/images/dest2.png',
-                  borderColor: const Color(0xFF4CAF50), // 초록 배경 카드 → 초록 테두리
+                  borderColor: const Color(0xFFB3DCC0), // 초록 배경 카드 → 파스텔 초록 테두리
                   onTap: () {
                     Navigator.push(
                       context,
@@ -103,7 +103,7 @@ class DestinationActionScreen extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(54),
-              border: Border.all(color: borderColor, width: 4),
+              border: Border.all(color: borderColor, width: 2.5),
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(51),

@@ -6,7 +6,6 @@ import 'auth_service.dart';
 import 'friend_service.dart';
 import 'main_screen.dart';
 import 'intro_screen.dart';
-import 'saved_region_service.dart';
 import 'worldcup_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -59,11 +58,11 @@ class _SplashScreenState extends State<SplashScreen> {
         return;
       }
 
-      // 인트로는 봤어도 월드컵/가챠 도중 이탈했을 수 있으니, 실제로 저장된
-      // 여행지가 있는지 서버에 물어봐서 홈 진입 여부를 계정 단위로 판단한다.
-      final hasSavedRegion = await _hasSavedRegion();
+      // 인트로는 봤어도 월드컵/가챠 도중 이탈했을 수 있으니, 서버에 저장된
+      // onboarding_completed 플래그로 홈 진입 여부를 계정 단위로 판단한다.
+      final onboardingCompleted = await AuthService.getOnboardingCompleted();
       if (!mounted) return;
-      if (hasSavedRegion) {
+      if (onboardingCompleted) {
         _openHome();
       } else {
         _openWorldCup();
@@ -79,11 +78,6 @@ class _SplashScreenState extends State<SplashScreen> {
     } finally {
       _checkingEntry = false;
     }
-  }
-
-  Future<bool> _hasSavedRegion() async {
-    final regions = await SavedRegionService.getAll();
-    return regions.isNotEmpty;
   }
 
   void _openHome() {
@@ -135,7 +129,8 @@ class _SplashScreenState extends State<SplashScreen> {
       }
 
       // 카카오 토큰을 백엔드로 보내 SoomTrip JWT를 발급받아 저장합니다.
-      await AuthService.loginWithKakao(token.accessToken);
+      final onboardingCompleted =
+          await AuthService.loginWithKakao(token.accessToken);
 
       // 기존 닉네임을 보존하고, 비어 있는 경우에만 카카오 닉네임을 사용합니다.
       try {
@@ -152,7 +147,13 @@ class _SplashScreenState extends State<SplashScreen> {
       }
 
       if (!mounted) return;
-      _openIntro();
+      // 이미 온보딩(월드컵→가챠)까지 끝낸 계정이 로그아웃 후 다시 로그인한
+      // 경우에는 인트로를 또 보여주지 않고 바로 홈으로 보낸다.
+      if (onboardingCompleted) {
+        _openHome();
+      } else {
+        _openIntro();
+      }
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

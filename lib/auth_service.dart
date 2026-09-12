@@ -13,7 +13,7 @@ class AuthService {
   static http.Client get client => _AuthenticatedClient();
   static const _introCompletedKey = 'soomtrip_intro_completed';
 
-  static Future<void> loginWithKakao(String kakaoAccessToken) async {
+  static Future<bool> loginWithKakao(String kakaoAccessToken) async {
     final response = await http
         .post(
           Uri.parse(_authUrl),
@@ -44,6 +44,8 @@ class AuthService {
     _sessionVersion++;
     await preferences.setString(_refreshKey, refresh);
     await preferences.setString(_jwtKey, jwt);
+
+    return body['onboarding_completed'] == true;
   }
 
   static Future<void> updateNickname(String nickname) async {
@@ -84,6 +86,46 @@ class AuthService {
   static Future<void> markIntroCompleted() async {
     final preferences = await SharedPreferences.getInstance();
     await preferences.setBool(_introCompletedKey, true);
+  }
+
+  // 서버에 저장된 계정 단위 온보딩(월드컵→가챠) 완료 여부.
+  // 기기를 바꾸거나 재설치해도 유지되어, 로그인 중 이탈 여부를 정확히 판단할 수 있다.
+  static Future<bool> getOnboardingCompleted() async {
+    final jwt = await getJwt();
+    if (jwt == null || jwt.isEmpty) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    final response = await client.get(
+      Uri.parse(_meUrl),
+      headers: {'Authorization': 'Bearer $jwt'},
+    ).timeout(const Duration(seconds: 15));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('내 정보 조회 실패 (${response.statusCode})');
+    }
+
+    final body = jsonDecode(utf8.decode(response.bodyBytes));
+    if (body is! Map<String, dynamic>) {
+      throw const FormatException('잘못된 사용자 정보 응답입니다.');
+    }
+    return body['onboarding_completed'] == true;
+  }
+
+  static Future<void> markOnboardingCompleted() async {
+    final jwt = await getJwt();
+    if (jwt == null || jwt.isEmpty) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    final response = await client.patch(
+      Uri.parse('$_meUrl/onboarding-complete'),
+      headers: {'Authorization': 'Bearer $jwt'},
+    ).timeout(const Duration(seconds: 15));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('온보딩 완료 처리 실패 (${response.statusCode})');
+    }
   }
 
   static Future<String?> getJwt() async {
