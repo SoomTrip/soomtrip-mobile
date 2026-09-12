@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:flutter/material.dart';
+import 'auth_service.dart';
 import 'main_screen.dart';
 import 'recommendation_service.dart';
 import 'saved_region_service.dart';
@@ -210,6 +211,12 @@ class _GachaScreenState extends State<GachaScreen>
     setState(() => _isSavingRegion = true);
     try {
       await SavedRegionService.save(candidate);
+      try {
+        await AuthService.markOnboardingCompleted();
+      } catch (error) {
+        // 온보딩 완료 표시가 실패해도 여행지 저장은 이미 끝났으니 진행을 막지 않는다.
+        debugPrint('[Gacha] 온보딩 완료 표시 실패: $error');
+      }
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const MainScreen()),
