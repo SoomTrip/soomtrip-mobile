@@ -3,6 +3,17 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+// 로그인/세션 체크 응답에서 다음 화면을 정하는 데 필요한 정보만 뽑아둔 값 객체.
+class AccountStatus {
+  final bool onboardingCompleted;
+  final bool agreementRequired;
+
+  const AccountStatus({
+    required this.onboardingCompleted,
+    required this.agreementRequired,
+  });
+}
+
 class AuthService {
   static const _authUrl = 'https://soomtrip.cspc.me/auth/kakao';
   static const _meUrl = 'https://soomtrip.cspc.me/users/me';
@@ -13,7 +24,8 @@ class AuthService {
   static http.Client get client => _AuthenticatedClient();
   static const _introCompletedKey = 'soomtrip_intro_completed';
 
-  static Future<bool> loginWithKakao(String kakaoAccessToken) async {
+  static Future<AccountStatus> loginWithKakao(
+      String kakaoAccessToken) async {
     final response = await http
         .post(
           Uri.parse(_authUrl),
@@ -45,7 +57,10 @@ class AuthService {
     await preferences.setString(_refreshKey, refresh);
     await preferences.setString(_jwtKey, jwt);
 
-    return body['onboarding_completed'] == true;
+    return AccountStatus(
+      onboardingCompleted: body['onboarding_completed'] == true,
+      agreementRequired: body['agreement_required'] == true,
+    );
   }
 
   static Future<void> updateNickname(String nickname) async {
@@ -112,9 +127,9 @@ class AuthService {
     await preferences.setBool(_introCompletedKey, true);
   }
 
-  // 서버에 저장된 계정 단위 온보딩(월드컵→가챠) 완료 여부.
+  // 서버에 저장된 계정 단위 온보딩(월드컵→가챠) 완료 여부 및 필수 약관 동의 여부.
   // 기기를 바꾸거나 재설치해도 유지되어, 로그인 중 이탈 여부를 정확히 판단할 수 있다.
-  static Future<bool> getOnboardingCompleted() async {
+  static Future<AccountStatus> getAccountStatus() async {
     final jwt = await getJwt();
     if (jwt == null || jwt.isEmpty) {
       throw Exception('로그인이 필요합니다.');
@@ -133,7 +148,34 @@ class AuthService {
     if (body is! Map<String, dynamic>) {
       throw const FormatException('잘못된 사용자 정보 응답입니다.');
     }
-    return body['onboarding_completed'] == true;
+    return AccountStatus(
+      onboardingCompleted: body['onboarding_completed'] == true,
+      agreementRequired:
+          body['terms_agreed_at'] == null || body['privacy_agreed_at'] == null,
+    );
+  }
+
+  // 이용약관 + 개인정보 수집·이용 필수 동의를 서버에 기록한다.
+  static Future<void> agreeToRequiredTerms() async {
+    final jwt = await getJwt();
+    if (jwt == null || jwt.isEmpty) {
+      throw Exception('로그인이 필요합니다.');
+    }
+
+    final response = await client
+        .patch(
+          Uri.parse('$_meUrl/agreements'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $jwt',
+          },
+          body: jsonEncode({'terms_agreed': true, 'privacy_agreed': true}),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('약관 동의 처리 실패 (${response.statusCode})');
+    }
   }
 
   static Future<void> markOnboardingCompleted() async {
