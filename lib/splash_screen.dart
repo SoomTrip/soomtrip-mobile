@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart'; // 🌟 카카오 로그인 도구상자
 import 'auth_service.dart';
+import 'consent_screen.dart';
 import 'friend_service.dart';
 import 'main_screen.dart';
 import 'intro_screen.dart';
@@ -51,26 +52,15 @@ class _SplashScreenState extends State<SplashScreen> {
       await Future<void>.delayed(const Duration(seconds: 2));
       if (!mounted) return;
 
-      // 서버의 onboarding_completed가 계정 단위의 진짜 정답이라, 로컬 인트로
-      // 완료 플래그보다 먼저 확인한다. (로컬 플래그는 기기를 재설치하면
-      // 초기화되므로, 이미 온보딩을 끝낸 계정이 재설치 후 재로그인해도
-      // 계속 인트로로 돌아가는 걸 막기 위함.)
-      final onboardingCompleted = await AuthService.getOnboardingCompleted();
+      // 서버 값(onboarding_completed, 약관 동의 여부)이 계정 단위의 진짜
+      // 정답이라, 로컬 인트로 완료 플래그보다 먼저 확인한다. (로컬 플래그는
+      // 기기를 재설치하면 초기화되므로, 이미 끝낸 계정이 재설치 후
+      // 재로그인해도 계속 처음으로 돌아가는 걸 막기 위함.)
+      final status = await AuthService.getAccountStatus();
       if (!mounted) return;
-      if (onboardingCompleted) {
-        _openHome();
-        return;
-      }
-
-      // 온보딩이 아직 안 끝났다면, 인트로를 본 적 있는지로 "처음 보는 안내"와
-      // "월드컵/가챠 도중 이탈해서 이어서 해야 하는 경우"를 구분한다.
-      final completedIntro = await AuthService.hasCompletedIntro();
+      final nextScreen = await _resolveNextScreen(status);
       if (!mounted) return;
-      if (!completedIntro) {
-        _openIntro();
-      } else {
-        _openWorldCup();
-      }
+      _navigateByStatus(status, nextScreen);
     } catch (_) {
       final hasJwt = await AuthService.hasJwt();
       if (!mounted) return;
@@ -84,13 +74,6 @@ class _SplashScreenState extends State<SplashScreen> {
     }
   }
 
-  void _openHome() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const MainScreen()),
-    );
-  }
-
   void _openIntro() {
     Navigator.pushReplacement(
       context,
@@ -98,10 +81,26 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 
-  void _openWorldCup() {
+  // 온보딩/인트로 상태만 보고 다음에 갈 화면을 정한다 (동의 여부는 별개로 처리).
+  Future<Widget> _resolveNextScreen(AccountStatus status) async {
+    if (status.onboardingCompleted) {
+      await AuthService.markIntroCompleted();
+      return const MainScreen();
+    }
+    final completedIntro = await AuthService.hasCompletedIntro();
+    return completedIntro ? const WorldCupScreen() : const IntroScreen();
+  }
+
+  // 필수 약관 동의가 아직 안 된 계정이면 동의 화면을 먼저 거치게 하고,
+  // 동의 화면 자체가 스스로 nextScreen으로 넘어간다. 이미 동의했다면 바로 이동.
+  void _navigateByStatus(AccountStatus status, Widget nextScreen) {
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => const WorldCupScreen()),
+      MaterialPageRoute(
+        builder: (_) => status.agreementRequired
+            ? ConsentScreen(nextScreen: nextScreen)
+            : nextScreen,
+      ),
     );
   }
 
@@ -133,8 +132,7 @@ class _SplashScreenState extends State<SplashScreen> {
       }
 
       // 카카오 토큰을 백엔드로 보내 SoomTrip JWT를 발급받아 저장합니다.
-      final onboardingCompleted =
-          await AuthService.loginWithKakao(token.accessToken);
+      final status = await AuthService.loginWithKakao(token.accessToken);
 
       // 기존 닉네임을 보존하고, 비어 있는 경우에만 카카오 닉네임을 사용합니다.
       try {
@@ -152,16 +150,11 @@ class _SplashScreenState extends State<SplashScreen> {
 
       if (!mounted) return;
       // 이미 온보딩(월드컵→가챠)까지 끝낸 계정이 로그아웃 후 다시 로그인한
-      // 경우에는 인트로를 또 보여주지 않고 바로 홈으로 보낸다. 이때 로컬
-      // 인트로 플래그도 같이 맞춰둬야, 다음에 앱을 그냥 재실행했을 때도
-      // _checkLoginStatus()가 일관되게 판단할 수 있다.
-      if (onboardingCompleted) {
-        await AuthService.markIntroCompleted();
-        if (!mounted) return;
-        _openHome();
-      } else {
-        _openIntro();
-      }
+      // 경우에는 인트로를 또 보여주지 않고 바로 홈으로 보낸다 (약관 동의가
+      // 아직 안 됐다면 그 전에 동의 화면부터 거친다).
+      final nextScreen = await _resolveNextScreen(status);
+      if (!mounted) return;
+      _navigateByStatus(status, nextScreen);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
