@@ -1068,6 +1068,16 @@ class _MyPageScreenState extends State<MyPageScreen> {
               ),
               const SizedBox(height: 4),
               _buildSettingsRow(
+                icon: Icons.description_outlined,
+                iconColor: const Color(0xFF6B4E31),
+                label: '이용약관',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _openTermsOfService();
+                },
+              ),
+              const SizedBox(height: 4),
+              _buildSettingsRow(
                 icon: Icons.logout_rounded,
                 iconColor: const Color(0xFFE57373),
                 label: '로그아웃',
@@ -1155,16 +1165,29 @@ class _MyPageScreenState extends State<MyPageScreen> {
     );
   }
 
-  Future<void> _openPrivacyPolicy() async {
-    final uri = Uri.parse('https://soomtrip.cspc.me/privacy');
+  // 인앱 브라우저(iOS: SFSafariViewController, 안드로이드: Chrome Custom Tabs)로
+  // 열면 주소창에 전체 경로(/privacy, /terms) 대신 도메인(soomtrip.cspc.me)만
+  // 축약해서 보여준다.
+  Future<void> _openPrivacyPolicy() => _openInAppBrowser(
+        'https://soomtrip.cspc.me/privacy',
+        '개인정보처리방침',
+      );
+
+  Future<void> _openTermsOfService() => _openInAppBrowser(
+        'https://soomtrip.cspc.me/terms',
+        '이용약관',
+      );
+
+  Future<void> _openInAppBrowser(String url, String label) async {
+    final uri = Uri.parse(url);
     try {
-      if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+      if (await launchUrl(uri, mode: LaunchMode.inAppWebView)) return;
     } catch (_) {
       // Show the same retry guidance when the platform cannot open the link.
     }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('개인정보처리방침 페이지를 열지 못했어요. 잠시 후 다시 시도해주세요.')),
+      SnackBar(content: Text('$label 페이지를 열지 못했어요. 잠시 후 다시 시도해주세요.')),
     );
   }
 }
