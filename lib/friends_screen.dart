@@ -343,14 +343,22 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   Widget _avatar(FriendUser user, double radius) {
-    final url = user.profileImage;
+    final profileImage = user.profileImage;
+    // 앱이 제공하는 기본(프리셋) 프로필 사진은 실제 URL이 아니라 에셋 경로
+    // 문자열(예: assets/images/profile3.jpeg)로 서버에 저장되어 있어서,
+    // NetworkImage로 그리면 로드에 실패해 기본 아이콘으로 보인다.
+    final isPresetAsset = profileImage?.startsWith('assets/') ?? false;
+    final hasImage = profileImage != null && profileImage.isNotEmpty;
+
     return CircleAvatar(
       radius: radius,
       backgroundColor: const Color(0xFFEEF3EA),
-      backgroundImage: url != null && url.isNotEmpty ? NetworkImage(url) : null,
-      child: url == null || url.isEmpty
-          ? const Icon(Icons.person, color: Color(0xFF4A7C59))
-          : null,
+      backgroundImage: !hasImage
+          ? null
+          : isPresetAsset
+              ? AssetImage(profileImage) as ImageProvider
+              : NetworkImage(profileImage),
+      child: hasImage ? null : const Icon(Icons.person, color: Color(0xFF4A7C59)),
     );
   }
 
