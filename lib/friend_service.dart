@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'auth_service.dart';
@@ -124,10 +125,40 @@ class FriendService {
     final response = await AuthService.client
         .get(Uri.parse('$_baseUrl$path'), headers: await _headers())
         .timeout(const Duration(seconds: 15));
+    if (kDebugMode) {
+      debugPrint('[Friends API] GET $path status=${response.statusCode}');
+    }
     _ensureSuccess(response, action);
     final body = jsonDecode(utf8.decode(response.bodyBytes));
     if (body is! List) {
       throw const FormatException('친구 목록 응답이 올바르지 않습니다.');
+    }
+    if (kDebugMode) {
+      debugPrint('[Friends API] GET $path count=${body.length}');
+      for (var index = 0; index < body.length; index++) {
+        final item = body[index];
+        if (item is! Map) continue;
+        for (final role in ['requester', 'receiver']) {
+          final user = item[role];
+          if (user is! Map) continue;
+          final raw = user['profile_image'];
+          final signed = user['signed_profile_image_url'];
+          final kind = raw == null
+              ? 'null'
+              : raw is! String
+                  ? 'invalid-type'
+                  : RegExp(r'^profile[1-5]$').hasMatch(raw)
+                      ? raw
+                      : raw.startsWith('profile/')
+                          ? 'storage-path'
+                          : raw.startsWith('https://')
+                              ? 'https-url'
+                              : 'unrecognized';
+          debugPrint('[Friends API] row=$index $role '
+              'profile_image=$kind '
+              'signed_url_present=${signed is String && signed.isNotEmpty}');
+        }
+      }
     }
     return body.map((item) {
       if (item is! Map<String, dynamic>) {

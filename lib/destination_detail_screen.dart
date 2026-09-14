@@ -338,9 +338,9 @@ class _DestinationDetailScreenState extends State<DestinationDetailScreen> {
 
   ({int restaurant, int other}) get _selectionLimits {
     return switch (_selectedTravelPeriod) {
-      '당일치기' => (restaurant: 3, other: 5),
-      '1박 2일' => (restaurant: 6, other: 10),
-      '2박 3일' => (restaurant: 9, other: 15),
+      '당일치기' => (restaurant: 3, other: 7),
+      '1박 2일' => (restaurant: 6, other: 12),
+      '2박 3일' => (restaurant: 9, other: 17),
       _ => (restaurant: 0, other: 0),
     };
   }

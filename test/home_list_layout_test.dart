@@ -56,12 +56,13 @@ void main() {
       await tester.pumpWidget(const MaterialApp(home: HomeScreen()));
       await tester.pumpAndSettle();
       expect(find.byIcon(Icons.bookmark_border).hitTestable(), findsOneWidget);
-      expect(find.byIcon(Icons.people_alt_rounded).hitTestable(), findsOneWidget);
+      expect(find.byIcon(Icons.people_alt_outlined).hitTestable(), findsOneWidget);
 
-      await tester.tap(find.byIcon(Icons.people_alt_rounded));
+      await tester.tap(find.byIcon(Icons.people_alt_outlined));
       await tester.pump();
       expect(find.text('From\n세영'), findsNothing);
       expect(find.text('start'), findsOneWidget);
+      expect(find.byIcon(Icons.people_alt_rounded), findsOneWidget);
       await tester.tap(find.text('start'));
       await tester.pumpAndSettle();
       expect(find.text('받은 여행지'), findsNWidgets(2));
@@ -74,7 +75,7 @@ void main() {
       await tester.tap(find.text('start'));
       await tester.pumpAndSettle();
       final gesture = await tester.startGesture(tester.getCenter(find.byIcon(Icons.people_alt_rounded)));
-      await tester.pump(const Duration(milliseconds: 900));
+      await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('From\n세영'), findsNothing);
       await tester.pump(const Duration(milliseconds: 150));
       expect(find.text('From\n세영'), findsOneWidget);
@@ -84,6 +85,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('어디로 떠나볼까요?'), findsOneWidget);
       expect(find.text('start'), findsNothing);
+      expect(find.byIcon(Icons.people_alt_outlined), findsOneWidget);
       await tester.pump(const Duration(seconds: 3));
       expect(tester.takeException(), isNull);
     }, () => MockClient((_) async => http.Response(jsonEncode([
