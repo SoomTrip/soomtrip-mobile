@@ -90,6 +90,7 @@ class SavedRegion {
   final String regionName;
   final List<SavedSpot> spots;
   final String? mobilityChoice;
+  final bool hasStamp;
   final RegionShare? sharedFrom;
   final List<RegionShare> sharedTo;
 
@@ -98,6 +99,7 @@ class SavedRegion {
     required this.regionName,
     required this.spots,
     this.mobilityChoice,
+    this.hasStamp = false,
     this.sharedFrom,
     this.sharedTo = const [],
   });
@@ -137,6 +139,7 @@ class SavedRegion {
       mobilityChoice: json['mobility_choice'] is String
           ? json['mobility_choice'] as String
           : null,
+      hasStamp: json['has_stamp'] == true,
       sharedFrom: sharedFromJson is Map<String, dynamic>
           ? RegionShare.fromJson(sharedFromJson)
           : null,
@@ -287,14 +290,14 @@ class SavedRegionService {
     _cachedRegions = null;
   }
 
-  static Future<void> remove(int savedRegionId) async {
+  static Future<void> remove(int savedRegionId, {bool keepStamp = false}) async {
     final jwt = await AuthService.getJwt();
     if (jwt == null || jwt.isEmpty) {
       throw Exception('로그인이 필요합니다.');
     }
 
     final response = await AuthService.client.delete(
-      Uri.parse('$_savedRegionsUrl/$savedRegionId'),
+      Uri.parse('$_savedRegionsUrl/$savedRegionId?keep_stamp=$keepStamp'),
       headers: {'Authorization': 'Bearer $jwt'},
     ).timeout(const Duration(seconds: 15));
 
@@ -311,21 +314,29 @@ class SavedRegionService {
 }
 
 class Stamp {
+  final int id;
   final int savedRegionId;
   final String regionName;
   final String assetKey;
+  // 이 도장의 원본 여행지가 "저장 목록"에서 삭제됐는지 여부.
+  // true면 여행지 없이 도장만 남아있는 상태(길게 눌러서 삭제 가능).
+  final bool isRegionDeleted;
 
   const Stamp({
+    required this.id,
     required this.savedRegionId,
     required this.regionName,
     required this.assetKey,
+    this.isRegionDeleted = false,
   });
 
   factory Stamp.fromJson(Map<String, dynamic> json) {
+    final id = json['id'];
     final savedRegionId = json['saved_region_id'];
     final regionName = json['region_name'];
     final assetKey = json['stamp_asset_key'];
-    if (savedRegionId is! int ||
+    if (id is! int ||
+        savedRegionId is! int ||
         regionName is! String ||
         assetKey is! String ||
         regionName.trim().isEmpty ||
@@ -333,9 +344,11 @@ class Stamp {
       throw const FormatException('도장 응답 형식이 올바르지 않습니다.');
     }
     return Stamp(
+      id: id,
       savedRegionId: savedRegionId,
       regionName: regionName.trim(),
       assetKey: assetKey.trim(),
+      isRegionDeleted: json['is_region_deleted'] == true,
     );
   }
 }
@@ -361,5 +374,27 @@ extension StampService on SavedRegionService {
         .whereType<Map<String, dynamic>>()
         .map(Stamp.fromJson)
         .toList(growable: false);
+  }
+
+  static Future<void> deleteStamp(int stampId) async {
+    final jwt = await AuthService.getJwt();
+    if (jwt == null || jwt.isEmpty) throw Exception('로그인이 필요합니다.');
+
+    final response = await AuthService.client.delete(
+      Uri.parse('https://soomtrip.cspc.me/stamps/$stampId'),
+      headers: {'Authorization': 'Bearer $jwt'},
+    ).timeout(const Duration(seconds: 15));
+
+    debugPrint('[Stamp API] DELETE status: ${response.statusCode}');
+
+    if (response.statusCode == 409) {
+      throw Exception('아직 저장 목록에 있는 여행지의 도장이라 삭제할 수 없습니다.');
+    }
+    if (response.statusCode == 404) {
+      throw Exception('도장을 찾을 수 없습니다.');
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('도장 삭제 실패 (${response.statusCode})');
+    }
   }
 }
