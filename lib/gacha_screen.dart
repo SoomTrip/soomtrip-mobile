@@ -309,7 +309,9 @@ class _GachaScreenState extends State<GachaScreen>
             ),
           ),
 
-          if (_isSpinning && !_isDropped && !_showZoomedCapsule)
+          if ((_turns == 0 || _isSpinning) &&
+              !_isDropped &&
+              !_showZoomedCapsule)
             Center(
               child: SizedBox(
                 width: 350,
@@ -324,7 +326,9 @@ class _GachaScreenState extends State<GachaScreen>
                         left: 0,
                         right: 0,
                         child: Text(
-                          _statusMessages[_statusIndex],
+                          _turns == 0
+                              ? '손잡이를 눌러주세요!'
+                              : _statusMessages[_statusIndex],
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             fontSize: 17,
