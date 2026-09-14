@@ -88,38 +88,97 @@ mixin SavedDestinationsController<T extends StatefulWidget> on State<T> {
   Future<void> showDeleteDialog(SavedRegion destination) async {
     if (deletingIds.contains(destination.id)) return;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFFFBF9F4),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('여행지 삭제',
-            style:
-                TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF333333))),
-        content: Text("'${destination.regionName}' 여행지를 진짜로 삭제할까요? 🥲",
-            style: const TextStyle(color: Colors.black87)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소',
-                style:
-                    TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('삭제',
-                style: TextStyle(
-                    color: Color(0xFFE57373), fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
+    bool keepStamp = false;
 
-    if (confirmed != true || !mounted) return;
+    if (destination.hasStamp) {
+      // 도장(그림일기)이 있는 여행지는 도장을 남길지 물어본다.
+      // 'keep'을 고르면 저장 목록에서만 사라지고 도장/일기는 그대로 남는다.
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFFFBF9F4),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text('여행지 삭제',
+              style: TextStyle(
+                  fontWeight: FontWeight.bold, color: Color(0xFF333333))),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                  "'${destination.regionName}' 여행지를 삭제하면 도장과 그림일기도 함께 사라져요. 도장까지 삭제할까요?",
+                  style: const TextStyle(color: Colors.black87)),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 4)),
+                      onPressed: () => Navigator.pop(context, 'delete'),
+                      child: const Text('삭제',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: Color(0xFFE57373),
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  Expanded(
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 4)),
+                      onPressed: () => Navigator.pop(context, 'keep'),
+                      child: const Text('도장은 남기기',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: Color(0xFF4A7C59),
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (choice == null || !mounted) return;
+      keepStamp = choice == 'keep';
+    } else {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFFFBF9F4),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text('여행지 삭제',
+              style: TextStyle(
+                  fontWeight: FontWeight.bold, color: Color(0xFF333333))),
+          content: Text("'${destination.regionName}' 여행지를 진짜로 삭제할까요? 🥲",
+              style: const TextStyle(color: Colors.black87)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('취소',
+                  style: TextStyle(
+                      color: Colors.grey, fontWeight: FontWeight.bold)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('삭제',
+                  style: TextStyle(
+                      color: Color(0xFFE57373), fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true || !mounted) return;
+    }
+
     setState(() => deletingIds.add(destination.id));
 
     try {
-      await SavedRegionService.remove(destination.id);
+      await SavedRegionService.remove(destination.id, keepStamp: keepStamp);
       if (bookmarkIds.contains(destination.id)) await toggleBookmark(destination.id);
       if (!mounted) return;
       setState(() {
@@ -127,8 +186,8 @@ mixin SavedDestinationsController<T extends StatefulWidget> on State<T> {
             .where((item) => item.id != destination.id)
             .toList(growable: false);
       });
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('저장한 여행지를 삭제했어요.')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(keepStamp ? '저장 목록에서 삭제했어요. 도장은 그대로 남아있어요.' : '저장한 여행지를 삭제했어요.')));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)

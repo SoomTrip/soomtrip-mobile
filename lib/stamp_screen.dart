@@ -7,14 +7,19 @@ import 'picture_diary_screen.dart';
 import 'saved_region_service.dart';
 
 class StampData {
+  final int id;
   final String name;
   final String assetPath; // 각각 다른 도장 이미지 경로
   final int savedRegionId;
+  // 원본 여행지가 저장 목록에서 삭제되어 도장만 남은 상태인지 여부.
+  final bool isRegionDeleted;
 
   const StampData({
+    required this.id,
     required this.name,
     required this.assetPath,
     required this.savedRegionId,
+    this.isRegionDeleted = false,
   });
 }
 
@@ -68,9 +73,11 @@ class _StampScreenState extends State<StampScreen> {
           ..addAll([
             for (final stamp in stamps.reversed)
               StampData(
+                id: stamp.id,
                 name: stamp.regionName,
                 assetPath: _assetPathFor(stamp.assetKey),
                 savedRegionId: stamp.savedRegionId,
+                isRegionDeleted: stamp.isRegionDeleted,
               ),
           ]);
         _errorMessage = null;
@@ -150,6 +157,53 @@ class _StampScreenState extends State<StampScreen> {
         );
       },
     );
+  }
+
+  // 🌟 여행지가 삭제되어 도장만 남은 경우, 길게 눌러서 도장(과 딸린 일기)을 완전히 삭제
+  Future<void> _onStampLongPressed(StampData stamp) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFFFBF9F4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('도장 삭제',
+            style:
+                TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF333333))),
+        content: Text(
+            "'${stamp.name}' 여행지가 저장 목록에 없어요.\n도장과 그림일기를 삭제할까요?",
+            style: const TextStyle(color: Colors.black87)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('취소',
+                style:
+                    TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('삭제',
+                style: TextStyle(
+                    color: Color(0xFFE57373), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await StampService.deleteStamp(stamp.id);
+      if (!mounted) return;
+      await _loadStamps();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('도장을 삭제했어요.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:
+              Text(error.toString().replaceFirst('Exception: ', ''))));
+    }
   }
 
   // 🌟 picture_diary_screen.dart와 동일한 패딩/비율로 다이어리 배경(diary.png)을 재사용한 미리보기 카드
@@ -457,6 +511,11 @@ class _StampScreenState extends State<StampScreen> {
                                         onTap: stampData == null
                                             ? null
                                             : () => _onStampTapped(stampData),
+                                        onLongPress: stampData == null ||
+                                                !stampData.isRegionDeleted
+                                            ? null
+                                            : () =>
+                                                _onStampLongPressed(stampData),
                                         child: _buildStampItem(stampData),
                                       ),
                                     ),
