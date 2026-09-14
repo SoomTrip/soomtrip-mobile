@@ -55,6 +55,7 @@ class RegionShare {
   final int userId;
   final String nickname;
   final String? profileImage;
+  final String? signedProfileImageUrl;
   final String? status;
 
   const RegionShare({
@@ -62,6 +63,7 @@ class RegionShare {
     required this.userId,
     required this.nickname,
     this.profileImage,
+    this.signedProfileImageUrl,
     this.status,
   });
 
@@ -77,6 +79,7 @@ class RegionShare {
       userId: userId,
       nickname: nickname,
       profileImage: json['profile_image'] as String?,
+      signedProfileImageUrl: json['signed_profile_image_url'] as String?,
       status: json['status'] as String?,
     );
   }
@@ -122,7 +125,8 @@ class SavedRegion {
     final sharedTo = <RegionShare>[];
     if (sharedToJson is List) {
       for (final item in sharedToJson) {
-        if (item is Map<String, dynamic>) sharedTo.add(RegionShare.fromJson(item));
+        if (item is Map<String, dynamic>)
+          sharedTo.add(RegionShare.fromJson(item));
       }
     }
 

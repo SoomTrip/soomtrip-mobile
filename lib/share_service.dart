@@ -12,9 +12,11 @@ class ShareRequest {
   final int senderId;
   final String senderNickname;
   final String? senderProfileImage;
+  final String? senderSignedProfileImageUrl;
   final int receiverId;
   final String receiverNickname;
   final String? receiverProfileImage;
+  final String? receiverSignedProfileImageUrl;
   final DateTime createdAt;
 
   const ShareRequest({
@@ -25,9 +27,11 @@ class ShareRequest {
     required this.senderId,
     required this.senderNickname,
     this.senderProfileImage,
+    this.senderSignedProfileImageUrl,
     required this.receiverId,
     required this.receiverNickname,
     this.receiverProfileImage,
+    this.receiverSignedProfileImageUrl,
     required this.createdAt,
   });
 
@@ -60,9 +64,13 @@ class ShareRequest {
       senderId: senderId,
       senderNickname: senderNickname,
       senderProfileImage: json['sender_profile_image'] as String?,
+      senderSignedProfileImageUrl:
+          json['sender_signed_profile_image_url'] as String?,
       receiverId: receiverId,
       receiverNickname: receiverNickname,
       receiverProfileImage: json['receiver_profile_image'] as String?,
+      receiverSignedProfileImageUrl:
+          json['receiver_signed_profile_image_url'] as String?,
       createdAt: DateTime.parse(createdAtRaw),
     );
   }
@@ -112,7 +120,8 @@ class ShareService {
     }
     final created = body['created'];
     if (created is! List ||
-        !created.any((item) => item is Map && item['friend_user_id'] == friendUserId)) {
+        !created.any(
+            (item) => item is Map && item['friend_user_id'] == friendUserId)) {
       throw Exception('여행지 공유 결과를 확인하지 못했어요.');
     }
   }

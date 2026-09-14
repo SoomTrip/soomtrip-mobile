@@ -80,7 +80,7 @@ class _PictureDiaryScreenState extends State<PictureDiaryScreen> {
         _selectedDate = entry.date;
         selectedWeather = _weatherForUi(entry.weather);
         _savedImageUrl = entry.imageUrl;
-        _displayImageUrl = entry.signedImageUrl ?? entry.imageUrl;
+        _displayImageUrl = entry.signedImageUrl;
         _isDrawingMode = _displayImageUrl == null;
       }
     } catch (error) {

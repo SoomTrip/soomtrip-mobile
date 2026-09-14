@@ -132,7 +132,6 @@ class SavedRegionListItem extends StatelessWidget {
             'To\n${destination.sharedTo.map((person) => person.nickname).join(', ')}',
         ].join('\n'),
         received: destination.sharedFrom != null,
-        selected: isBookmarked,
         onTap: onToggleBookmark);
   }
 }
@@ -142,11 +141,9 @@ class _ShareBubbleIcon extends StatefulWidget {
       {super.key,
       required this.label,
       required this.received,
-      required this.selected,
       required this.onTap});
   final String label;
   final bool received;
-  final bool selected;
   final VoidCallback onTap;
 
   @override
@@ -207,14 +204,9 @@ class _ShareBubbleIconState extends State<_ShareBubbleIcon> {
         child: IconButton(
           onPressed: widget.onTap,
           icon: Icon(
-              widget.selected
-                  ? (widget.received
-                      ? Icons.people_alt_rounded
-                      : Icons.person_rounded)
-                  : (widget.received
-                      ? Icons.people_alt_outlined
-                      : Icons.person_outline_rounded),
-              color: widget.selected ? const Color(0xFF4A7C59) : Colors.grey),
+            widget.received ? Icons.people_alt_rounded : Icons.person_rounded,
+            color: const Color(0xFF4A7C59),
+          ),
         ),
       ),
     );

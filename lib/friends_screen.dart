@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'friend_service.dart';
+import 'profile_images.dart';
 import 'home_logo_button.dart';
 import 'relative_time.dart';
 
@@ -148,7 +149,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
               child: const Text('취소', style: TextStyle(color: Colors.grey))),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('삭제', style: TextStyle(color: Color(0xFFE57373)))),
+              child:
+                  const Text('삭제', style: TextStyle(color: Color(0xFFE57373)))),
         ],
       ),
     );
@@ -331,34 +333,34 @@ class _FriendsScreenState extends State<FriendsScreen> {
           style: const TextStyle(fontWeight: FontWeight.bold)),
       subtitle: Text(user.userCode),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        IconButton(tooltip: '여행지 보내기',
-          icon: const Icon(Icons.send_rounded, color: Color(0xFF4A7C59)),
-          onPressed: () => showDialog<void>(context: context,
-            builder: (_) => ShareRegionDialog(friend: user))),
         IconButton(
-          icon: const Icon(Icons.person_remove_outlined, color: Colors.grey),
-          onPressed: () => _removeFriend(relation)),
+            tooltip: '여행지 보내기',
+            icon: const Icon(Icons.send_rounded, color: Color(0xFF4A7C59)),
+            onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => ShareRegionDialog(friend: user))),
+        IconButton(
+            icon: const Icon(Icons.person_remove_outlined, color: Colors.grey),
+            onPressed: () => _removeFriend(relation)),
       ]),
     );
   }
 
   Widget _avatar(FriendUser user, double radius) {
-    final profileImage = user.profileImage;
-    // 앱이 제공하는 기본(프리셋) 프로필 사진은 실제 URL이 아니라 에셋 경로
-    // 문자열(예: assets/images/profile3.jpeg)로 서버에 저장되어 있어서,
-    // NetworkImage로 그리면 로드에 실패해 기본 아이콘으로 보인다.
-    final isPresetAsset = profileImage?.startsWith('assets/') ?? false;
-    final hasImage = profileImage != null && profileImage.isNotEmpty;
+    final asset = profileAsset(user.profileImage, user.signedProfileImageUrl);
+    final url = user.signedProfileImageUrl;
+    final hasImage = asset != null || (url != null && url.isNotEmpty);
 
     return CircleAvatar(
       radius: radius,
       backgroundColor: const Color(0xFFEEF3EA),
       backgroundImage: !hasImage
           ? null
-          : isPresetAsset
-              ? AssetImage(profileImage) as ImageProvider
-              : NetworkImage(profileImage),
-      child: hasImage ? null : const Icon(Icons.person, color: Color(0xFF4A7C59)),
+          : asset != null
+              ? AssetImage(asset) as ImageProvider
+              : NetworkImage(url!),
+      child:
+          hasImage ? null : const Icon(Icons.person, color: Color(0xFF4A7C59)),
     );
   }
 

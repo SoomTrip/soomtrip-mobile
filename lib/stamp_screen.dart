@@ -406,7 +406,7 @@ class _StampScreenState extends State<StampScreen> {
         child: Column(
           children: [
             const SizedBox(height: 10),
-            const Text("이번 여행도 한 장 남겨볼까요? 🌱",
+            const Text("여행 추억을 남겨볼까요? 🌱",
                 style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,

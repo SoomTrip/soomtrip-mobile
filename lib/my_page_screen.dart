@@ -1,7 +1,5 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,6 +8,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'auth_service.dart';
 import 'friend_service.dart';
+import 'profile_service.dart';
+import 'profile_images.dart';
 import 'home_logo_button.dart';
 import 'relative_time.dart';
 import 'saved_region_service.dart';
@@ -98,8 +98,8 @@ class _MyPageScreenState extends State<MyPageScreen> {
               : '${request.regionName} 공유를 거절했어요.')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('여행지 공유 응답 실패')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('여행지 공유 응답 실패')));
     }
   }
 
@@ -178,44 +178,21 @@ class _MyPageScreenState extends State<MyPageScreen> {
 
   Future<void> _loadUserProfile() async {
     final preferences = await SharedPreferences.getInstance();
-    final savedAsset = preferences.getString(_profileAssetKey);
-    final savedBytes = preferences.getString(_profileBytesKey);
-    Uint8List? decodedBytes;
-    if (savedBytes != null) {
-      try {
-        decodedBytes = base64Decode(savedBytes);
-      } on FormatException {
-        await preferences.remove(_profileBytesKey);
-      }
-    }
-
-    if (mounted) {
-      setState(() {
-        _selectedProfileAsset = savedAsset;
-        _selectedProfileBytes = decodedBytes;
-      });
-    }
-
     try {
       final user = await FriendService.getMe();
       if (mounted) {
         setState(() {
           _userCode = user.userCode;
           _nickname = user.nickname;
-          final serverProfileImage = user.profileImage;
-          // 앱이 제공하는 기본 프로필 사진은 URL이 아니라 에셋 경로 문자열로
-          // 서버에 저장된다. 로컬 캐시가 비어있으면(재설치 등) 서버 값으로 복원한다.
-          if (_selectedProfileAsset == null &&
-              _selectedProfileBytes == null &&
-              serverProfileImage != null &&
-              serverProfileImage.startsWith('assets/')) {
-            _selectedProfileAsset = serverProfileImage;
-            preferences.setString(_profileAssetKey, serverProfileImage);
-          } else {
-            _profileImageUrl ??= serverProfileImage;
-          }
+          _selectedProfileAsset =
+              profileAsset(user.profileImage, user.signedProfileImageUrl);
+          _selectedProfileBytes = null;
+          _profileImageUrl = user.signedProfileImageUrl;
         });
       }
+      await preferences.remove(_profileAssetKey);
+      await preferences.remove(_profileBytesKey);
+      return;
     } catch (error) {
       debugPrint('[My Page] Failed to load user profile: $error');
     }
@@ -246,6 +223,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
     final formKey = GlobalKey<FormState>();
     var draftAsset = _selectedProfileAsset;
     var draftBytes = _selectedProfileBytes;
+    var imageChanged = false;
     var saving = false;
     var picking = false;
     String? errorMessage;
@@ -312,6 +290,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
                                 : () => updateSheet(() {
                                       draftAsset = asset;
                                       draftBytes = null;
+                                      imageChanged = true;
                                     }),
                             borderRadius: BorderRadius.circular(32),
                             child: Container(
@@ -348,16 +327,20 @@ class _MyPageScreenState extends State<MyPageScreen> {
                                     );
                                     if (image != null) {
                                       final bytes = await image.readAsBytes();
+                                      ProfileService.imageType(bytes);
                                       if (!sheetContext.mounted) return;
                                       updateSheet(() {
                                         draftBytes = bytes;
                                         draftAsset = null;
+                                        imageChanged = true;
                                       });
                                     }
-                                  } catch (_) {
+                                  } catch (error) {
                                     if (sheetContext.mounted) {
                                       updateSheet(() => errorMessage =
-                                          '사진을 불러오지 못했어요. 다시 시도해 주세요.');
+                                          error is FormatException
+                                              ? error.message
+                                              : '사진을 불러오지 못했어요. 다시 시도해 주세요.');
                                     }
                                   } finally {
                                     if (sheetContext.mounted) {
@@ -412,42 +395,30 @@ class _MyPageScreenState extends State<MyPageScreen> {
                                   try {
                                     final nickname =
                                         nicknameController.text.trim();
-                                    if (nickname != _nickname) {
-                                      await AuthService.updateNickname(
-                                          nickname);
-                                    }
-                                    final preferences =
-                                        await SharedPreferences.getInstance();
-                                    if (draftBytes != null) {
-                                      await preferences.setString(
-                                          _profileBytesKey,
-                                          base64Encode(draftBytes!));
-                                      await preferences
-                                          .remove(_profileAssetKey);
-                                    } else if (draftAsset != null) {
-                                      await preferences.setString(
-                                          _profileAssetKey, draftAsset!);
-                                      await preferences
-                                          .remove(_profileBytesKey);
-                                      // 앱이 제공하는 기본 프로필 사진은 서버에도 저장해서
-                                      // 재설치/기기 변경 후에도 유지되게 한다.
-                                      // (갤러리에서 고른 사진은 아직 서버 업로드 기능이 없어
-                                      // 이 기기에만 남는다.)
-                                      try {
-                                        await AuthService.updateProfileImage(
-                                            draftAsset!);
-                                      } catch (error) {
-                                        debugPrint(
-                                            '[My Page] 프로필 사진 서버 동기화 실패: $error');
-                                      }
-                                    }
+                                    final uploadBytes =
+                                        imageChanged ? draftBytes : null;
+                                    final preset =
+                                        imageChanged && draftAsset != null
+                                            ? profileAssets.entries
+                                                .firstWhere((entry) =>
+                                                    entry.value == draftAsset)
+                                                .key
+                                            : null;
+                                    final user = await ProfileService.save(
+                                        nickname: nickname,
+                                        imageBytes: uploadBytes,
+                                        preset: preset);
                                     if (!mounted || !sheetContext.mounted) {
                                       return;
                                     }
                                     setState(() {
-                                      _nickname = nickname;
-                                      _selectedProfileAsset = draftAsset;
-                                      _selectedProfileBytes = draftBytes;
+                                      _nickname = user.nickname;
+                                      _profileImageUrl =
+                                          user.signedProfileImageUrl;
+                                      _selectedProfileAsset = profileAsset(
+                                          user.profileImage,
+                                          user.signedProfileImageUrl);
+                                      _selectedProfileBytes = null;
                                     });
                                     Navigator.pop(sheetContext);
                                   } catch (_) {
@@ -876,8 +847,6 @@ class _MyPageScreenState extends State<MyPageScreen> {
                 ),
               ],
             ),
-            // 🌟 지도 일러스트 들어갈 곳
-            const Icon(Icons.map_rounded, size: 40, color: Color(0xFFCDDC39)),
             const Icon(Icons.chevron_right_rounded, color: Colors.grey),
           ],
         ),

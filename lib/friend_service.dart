@@ -9,12 +9,14 @@ class FriendUser {
   final String nickname;
   final String userCode;
   final String? profileImage;
+  final String? signedProfileImageUrl;
 
   const FriendUser(
       {required this.id,
       required this.nickname,
       required this.userCode,
-      this.profileImage});
+      this.profileImage,
+      this.signedProfileImageUrl});
 
   factory FriendUser.fromJson(Map<String, dynamic> json) {
     final id = json['id'];
@@ -27,7 +29,8 @@ class FriendUser {
         id: id,
         nickname: nickname,
         userCode: userCode,
-        profileImage: json['profile_image'] as String?);
+        profileImage: json['profile_image'] as String?,
+        signedProfileImageUrl: json['signed_profile_image_url'] as String?);
   }
 }
 
