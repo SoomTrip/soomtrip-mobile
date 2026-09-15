@@ -26,7 +26,6 @@ class MyPageScreen extends StatefulWidget {
 class _MyPageScreenState extends State<MyPageScreen> {
   static const _profileAssetKey = 'my_page_profile_asset';
   static const _profileBytesKey = 'my_page_profile_bytes';
-  static const _notificationsEnabledKey = 'my_page_notifications_enabled';
   static const _defaultProfileAssets = [
     'assets/images/profile1.jpeg',
     'assets/images/profile2.jpeg',
@@ -37,7 +36,6 @@ class _MyPageScreenState extends State<MyPageScreen> {
 
   bool _isLoggingOut = false;
   bool _isDeletingAccount = false;
-  bool _notificationsEnabled = true;
   String? _userCode;
   String? _nickname;
   String? _profileImageUrl;
@@ -57,14 +55,6 @@ class _MyPageScreenState extends State<MyPageScreen> {
     _loadUserProfile();
     _loadSavedDestinationCount();
     _loadReceivedShares();
-    _loadNotificationSetting();
-  }
-
-  Future<void> _loadNotificationSetting() async {
-    final preferences = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    setState(() => _notificationsEnabled =
-        preferences.getBool(_notificationsEnabledKey) ?? true);
   }
 
   Future<void> _loadReceivedShares() async {
@@ -1024,8 +1014,6 @@ class _MyPageScreenState extends State<MyPageScreen> {
               const Text('설정',
                   style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
-              _buildNotificationToggleRow(),
-              const Divider(height: 28),
               _buildSettingsRow(
                 icon: Icons.privacy_tip_outlined,
                 iconColor: const Color(0xFF6B4E31),
@@ -1043,6 +1031,16 @@ class _MyPageScreenState extends State<MyPageScreen> {
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _openTermsOfService();
+                },
+              ),
+              const SizedBox(height: 4),
+              _buildSettingsRow(
+                icon: Icons.menu_book_outlined,
+                iconColor: const Color(0xFF6B4E31),
+                label: '사용설명서',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _openUserManual();
                 },
               ),
               const SizedBox(height: 4),
@@ -1068,36 +1066,6 @@ class _MyPageScreenState extends State<MyPageScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildNotificationToggleRow() {
-    return StatefulBuilder(
-      builder: (context, setSheetState) => Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.notifications_none_rounded, color: Color(0xFF6B4E31)),
-              SizedBox(width: 12),
-              Text('알림 받기',
-                  style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF333333))),
-            ],
-          ),
-          Switch(
-            value: _notificationsEnabled,
-            activeThumbColor: const Color(0xFF4A7C59),
-            onChanged: (value) async {
-              setSheetState(() => _notificationsEnabled = value);
-              final preferences = await SharedPreferences.getInstance();
-              await preferences.setBool(_notificationsEnabledKey, value);
-            },
-          ),
-        ],
       ),
     );
   }
@@ -1145,6 +1113,11 @@ class _MyPageScreenState extends State<MyPageScreen> {
   Future<void> _openTermsOfService() => _openInAppBrowser(
         'https://soomtrip.cspc.me/terms',
         '이용약관',
+      );
+
+  Future<void> _openUserManual() => _openInAppBrowser(
+        'https://cspclab.notion.site/SoomTrip-3dcb8c9a74bd808ba0e4d0fd75c128db',
+        '사용설명서',
       );
 
   Future<void> _openInAppBrowser(String url, String label) async {
