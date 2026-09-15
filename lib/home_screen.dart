@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'destination_detail_screen.dart';
 import 'home_logo_button.dart';
@@ -113,11 +114,29 @@ class _HomeScreenState extends State<HomeScreen>
             '나만의 취향에 맞는 여행지를 추천받고,\n친구와 함께 여행 코스를 공유해보세요.\n\n버전 1.0.0'),
         actions: [
           TextButton(
+              onPressed: _openUserManual,
+              child: const Text('사용설명서 보기',
+                  style: TextStyle(color: Color(0xFF6B4E31)))),
+          TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('확인',
                   style: TextStyle(color: Color(0xFF4A7C59)))),
         ],
       ),
+    );
+  }
+
+  Future<void> _openUserManual() async {
+    final uri =
+        Uri.parse('https://cspclab.notion.site/SoomTrip-3dcb8c9a74bd808ba0e4d0fd75c128db');
+    try {
+      if (await launchUrl(uri, mode: LaunchMode.inAppWebView)) return;
+    } catch (_) {
+      // Show the same retry guidance when the platform cannot open the link.
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('사용설명서 페이지를 열지 못했어요. 잠시 후 다시 시도해주세요.')),
     );
   }
 
