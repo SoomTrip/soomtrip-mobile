@@ -1,0 +1,6 @@
+# Copy to key.properties and fill in locally. Never commit passwords or keystores.
+# Use an absolute path; relative paths are resolved from android/app.
+storeFile=/absolute/path/to/release-keystore.jks
+storePassword=
+keyAlias=
+keyPassword=
