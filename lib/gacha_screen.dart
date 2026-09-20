@@ -145,7 +145,8 @@ class _GachaScreenState extends State<GachaScreen>
       _shakeController.stop();
       setState(() => _isSpinning = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('여행지 추천 실패')),
+        const SnackBar(
+            content: Text('현재 요청이 너무 많아요. 잠시 후 다시 시도해주세요.')),
       );
       return;
     }

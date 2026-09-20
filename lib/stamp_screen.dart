@@ -32,6 +32,12 @@ class StampScreen extends StatefulWidget {
 
 class _StampScreenState extends State<StampScreen> {
   static const int _stampsPerPage = 5;
+  // stamp_bg.png 원본 픽셀 비율(1024x1536) — AspectRatio로 이 비율을 그대로
+  // 유지시켜서 화면 비율이 달라져도 배경 그림이 늘어나지 않게 한다.
+  static const double _kStampBoardAspectRatio = 1024 / 1536;
+  // 도장 크기(130)를 설계할 때 기준으로 삼은 도장판 너비. 실제 보드 너비를
+  // 이 값으로 나눈 비율만큼 도장 크기도 같이 스케일링한다.
+  static const double _kStampBoardDesignWidth = 380.0;
   static const double _stampSize = 130.0;
 
   final PageController _pageController = PageController();
@@ -472,7 +478,7 @@ class _StampScreenState extends State<StampScreen> {
             // ==========================================
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Stack(
                   children: [
                     // PageView로 좌우 스와이프 기능 추가.
@@ -485,45 +491,64 @@ class _StampScreenState extends State<StampScreen> {
                         setState(() => _currentPage = page);
                       },
                       itemBuilder: (context, pageIndex) {
-                        return LayoutBuilder(
-                          builder: (context, constraints) {
-                            return Stack(
-                              children: [
-                                Positioned.fill(
-                                  child: Image.asset('assets/images/stamp_bg.png',
-                                      fit: BoxFit.fill),
-                                ),
-                                ...List.generate(_stampsPerPage, (slotIndex) {
-                                  int stampIndex =
-                                      (pageIndex * _stampsPerPage) + slotIndex;
-                                  StampData? stampData =
-                                      stampIndex < myStamps.length
-                                          ? myStamps[stampIndex]
-                                          : null;
-                                  var slot = pageSlots[slotIndex];
-
-                                  return Positioned(
-                                    left: constraints.maxWidth * slot['dx']!,
-                                    top: constraints.maxHeight * slot['dy']!,
-                                    child: Transform.rotate(
-                                      angle: slot['angle']!,
-                                      child: GestureDetector(
-                                        onTap: stampData == null
-                                            ? null
-                                            : () => _onStampTapped(stampData),
-                                        onLongPress: stampData == null ||
-                                                !stampData.isRegionDeleted
-                                            ? null
-                                            : () =>
-                                                _onStampLongPressed(stampData),
-                                        child: _buildStampItem(stampData),
-                                      ),
+                        // 배경 원본 비율을 유지한 채 가운데 정렬해서, 화면
+                        // 비율이 달라져도 도장판 그림이 늘어나지 않게 한다.
+                        return Center(
+                          child: AspectRatio(
+                            aspectRatio: _kStampBoardAspectRatio,
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                final stampScale = constraints.maxWidth /
+                                    _kStampBoardDesignWidth;
+                                final stampSize = (_stampSize * stampScale)
+                                    .clamp(80.0, 170.0)
+                                    .toDouble();
+                                return Stack(
+                                  children: [
+                                    Positioned.fill(
+                                      child: Image.asset(
+                                          'assets/images/stamp_bg.png',
+                                          fit: BoxFit.contain),
                                     ),
-                                  );
-                                }),
-                              ],
-                            );
-                          },
+                                    ...List.generate(_stampsPerPage,
+                                        (slotIndex) {
+                                      int stampIndex =
+                                          (pageIndex * _stampsPerPage) +
+                                              slotIndex;
+                                      StampData? stampData =
+                                          stampIndex < myStamps.length
+                                              ? myStamps[stampIndex]
+                                              : null;
+                                      var slot = pageSlots[slotIndex];
+
+                                      return Positioned(
+                                        left:
+                                            constraints.maxWidth * slot['dx']!,
+                                        top:
+                                            constraints.maxHeight * slot['dy']!,
+                                        child: Transform.rotate(
+                                          angle: slot['angle']!,
+                                          child: GestureDetector(
+                                            onTap: stampData == null
+                                                ? null
+                                                : () =>
+                                                    _onStampTapped(stampData),
+                                            onLongPress: stampData == null ||
+                                                    !stampData.isRegionDeleted
+                                                ? null
+                                                : () => _onStampLongPressed(
+                                                    stampData),
+                                            child: _buildStampItem(
+                                                stampData, stampSize),
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
                         );
                       },
                     ),
@@ -611,38 +636,41 @@ class _StampScreenState extends State<StampScreen> {
   }
 
   // 🌟 도장 이미지 위에 텍스트를 오버레이하는 위젯
-  Widget _buildStampItem(StampData? data) {
+  // size: 도장판 너비 비율에 맞춰 계산된 실제 도장 크기 (기준값 _stampSize=130)
+  Widget _buildStampItem(StampData? data, double size) {
     if (data == null) {
-      return const SizedBox(width: _stampSize, height: _stampSize);
+      return SizedBox(width: size, height: size);
     }
 
+    final labelScale = size / _stampSize;
+
     return SizedBox(
-      width: _stampSize,
-      height: _stampSize,
+      width: size,
+      height: size,
       child: Stack(
         alignment: Alignment.center,
         children: [
           Image.asset(
             data.assetPath,
-            width: _stampSize,
-            height: _stampSize,
+            width: size,
+            height: size,
             fit: BoxFit.contain,
           ),
           // top과 bottom을 함께 고정해 라벨 칸 높이 자체를 고정시킴.
           // (bottom만 고정하면 이름이 길어져 FittedBox가 줄어들 때 박스 높이도
           //  같이 줄어들어서 아래로 내려간 것처럼 보였음)
           Positioned(
-            left: 23,
-            right: 23,
-            top: 67,
-            bottom: 39,
+            left: 23 * labelScale,
+            right: 23 * labelScale,
+            top: 67 * labelScale,
+            bottom: 39 * labelScale,
             child: FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
                 data.name,
                 maxLines: 1,
-                style: const TextStyle(
-                    fontSize: 16,
+                style: TextStyle(
+                    fontSize: 16 * labelScale,
                     fontWeight: FontWeight.w900,
                     color: Colors.black87,
                     height: 1.1),

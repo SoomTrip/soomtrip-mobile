@@ -571,104 +571,127 @@ class _RouteScreenState extends State<RouteScreen> {
         ),
 
         // ==========================================
-        // 2. 하단: 횡스크롤 애니메이션 영역 (기존 유지)
+        // 2. 하단: 횡스크롤 애니메이션 영역
+        // 표지판 기준 설계 높이(_kBottomAreaDesignHeight) 대비 실제 가용 높이
+        // 비율만큼 전체 요소를 스케일링해서, 화면 비율이 달라져도 표지판이
+        // 위로 잘리거나(overflow) 붕 뜨지 않게 하고, 지도와 표지판 사이의
+        // 여백도 기기와 상관없이 항상 같은 비율로 유지되게 한다.
         // ==========================================
         Expanded(
           flex: 4,
-          child: Stack(
-            children: [
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Image.asset('assets/images/road.png',
-                    height: 64, fit: BoxFit.cover),
-              ),
-              NotificationListener<ScrollNotification>(
-                onNotification: (notification) {
-                  if (notification is ScrollEndNotification)
-                    setState(() => _currentFrame = 1);
-                  return false;
-                },
-                child: ListView.separated(
-                  controller: _scrollController,
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 100),
-                  itemCount: _currentSpots.length,
-                  separatorBuilder: (context, index) => SizedBox(
-                    width: 48,
-                    child: Align(
-                      alignment: const Alignment(0.5, 1.0),
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 72),
-                        child: Transform.translate(
-                          offset: const Offset(-20, 0),
-                          child: OverflowBox(
-                            minWidth: 160,
-                            maxWidth: 160,
-                            child: Text(
-                              _travelTime(_currentSpots[index + 1]),
-                              maxLines: 2,
-                              softWrap: true,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: _travelTime(_currentSpots[index + 1])
-                                        .contains('\n')
-                                    ? 16
-                                    : 18,
-                                color: Color(0xFF4A7C59),
-                                fontWeight: FontWeight.w600,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // clamp 없이 그대로 나누기만 하면: 표지판이 필요로 하는 높이(335)는
+              // 항상 maxHeight * (335 / designHeight)만큼만 차지하고, 나머지가
+              // 지도-표지판 사이 여백이 되므로 여백 비율이 기기에 상관없이 고정된다.
+              final scale = constraints.maxHeight / _kBottomAreaDesignHeight;
+              return Stack(
+                children: [
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Image.asset('assets/images/road.png',
+                        height: 64 * scale, fit: BoxFit.cover),
+                  ),
+                  NotificationListener<ScrollNotification>(
+                    onNotification: (notification) {
+                      if (notification is ScrollEndNotification)
+                        setState(() => _currentFrame = 1);
+                      return false;
+                    },
+                    child: ListView.separated(
+                      controller: _scrollController,
+                      scrollDirection: Axis.horizontal,
+                      padding: EdgeInsets.symmetric(horizontal: 100 * scale),
+                      itemCount: _currentSpots.length,
+                      separatorBuilder: (context, index) => SizedBox(
+                        width: 48 * scale,
+                        child: Align(
+                          alignment: const Alignment(0.5, 1.0),
+                          child: Padding(
+                            padding: EdgeInsets.only(bottom: 72 * scale),
+                            child: Transform.translate(
+                              offset: Offset(-20 * scale, 0),
+                              child: OverflowBox(
+                                minWidth: 160 * scale,
+                                maxWidth: 160 * scale,
+                                child: Text(
+                                  _travelTime(_currentSpots[index + 1]),
+                                  maxLines: 2,
+                                  softWrap: true,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: (_travelTime(
+                                                    _currentSpots[index + 1])
+                                                .contains('\n')
+                                            ? 16
+                                            : 18) *
+                                        scale,
+                                    color: Color(0xFF4A7C59),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
+                      itemBuilder: (context, index) {
+                        return _buildSpotItem(_currentSpots[index], scale);
+                      },
                     ),
                   ),
-                  itemBuilder: (context, index) {
-                    return _buildSpotItem(_currentSpots[index]);
-                  },
-                ),
-              ),
-              Positioned(
-                left: 20,
-                bottom: 25,
-                child: Transform.scale(
-                  scaleX: _isFacingRight ? 1 : -1,
-                  child: Image.asset('assets/images/walk_$_currentFrame.png',
-                      width: 100, height: 120, fit: BoxFit.contain),
-                ),
-              ),
-            ],
+                  Positioned(
+                    left: 20 * scale,
+                    bottom: 25 * scale,
+                    child: Transform.scale(
+                      scaleX: _isFacingRight ? 1 : -1,
+                      child: Image.asset('assets/images/walk_$_currentFrame.png',
+                          width: 100 * scale,
+                          height: 120 * scale,
+                          fit: BoxFit.contain),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ],
     );
   }
 
-  // 하단 아이템 렌더링 (기존 동일)[cite: 4]
-  Widget _buildSpotItem(RouteSpot spot) {
+  // 표지판이 실제로 차지하는 높이(bottom 오프셋 35 + 이미지 높이 300 = 335)에
+  // 지도-표지판 사이 여백 몫(약 10%)까지 더한 "설계 캔버스" 높이.
+  // 이 값을 키우면 여백이 넓어지고, 335에 가깝게 줄이면 여백이 좁아진다.
+  static const double _kBottomAreaDesignHeight = 372;
+
+  // 하단 아이템 렌더링 (가용 높이 비율에 맞춰 스케일링)
+  Widget _buildSpotItem(RouteSpot spot, double scale) {
     return SizedBox(
-      width: 180,
+      width: 180 * scale,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           Positioned(
-            bottom: 35,
-            left: 15,
+            bottom: 35 * scale,
+            left: 15 * scale,
             child: SizedBox(
-              width: 120,
-              height: 270,
+              width: 120 * scale,
+              height: 270 * scale,
               child: Stack(
                 alignment: Alignment.topCenter,
                 children: [
                   Image.asset('assets/images/sign.png',
-                      width: 120, height: 300, fit: BoxFit.fill),
+                      width: 120 * scale,
+                      height: 300 * scale,
+                      fit: BoxFit.fill),
                   Positioned(
-                    top: 25,
-                    left: 24,
-                    right: 24,
-                    height: 60,
+                    top: 25 * scale,
+                    left: 24 * scale,
+                    right: 24 * scale,
+                    height: 60 * scale,
                     child: RouteSignLabel(name: routeSignName(spot.name)),
                   ),
                 ],
